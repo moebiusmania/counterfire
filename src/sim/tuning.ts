@@ -128,12 +128,51 @@ export const DEPOT = {
   ticksPerRound: 6,
 };
 
+/** Hit points and footprint of destructible structures (SPEC §8.2). */
+export const STRUCTURES = {
+  hp: { flagTower: 120, building: 60, turret: 80, fuelDepot: 60, ammoTent: 50 },
+  /** Side of the square a structure blocks, in tiles. */
+  footprint: 0.9,
+  /** Soldiers that run out of a destroyed building: min, max. */
+  soldiers: [2, 4] as const,
+};
+
+export const TURRETS = {
+  gun: { range: 6, turnRate: 0.03, cooldown: 50, shot: 'turretShell', hitsAir: false },
+  missile: { range: 8, turnRate: 0.025, cooldown: 120, shot: 'turretMissile', hitsAir: true },
+} as const;
+export type TurretVariant = keyof typeof TURRETS;
+
+export const SOLDIERS = {
+  runSpeed: 0.03,
+  /** Soldiers flee vehicles closer than this. */
+  fearRadius: 4,
+  radius: 0.15,
+  /** Ticks a dead soldier lies there before being cleared. */
+  corpseTicks: 300,
+};
+
+/** The submarine that guards the edge of the map (SPEC §8.4). */
+export const SUBMARINE = {
+  /** How far beyond the boundary it surfaces. */
+  standoff: 4,
+  surfaceTicks: 60,
+  /** Surfaced time before firing, and after firing before diving. */
+  aimTicks: 45,
+  diveTicks: 90,
+};
+
 export interface ShotTuning {
   speed: number;
   range: number;
   damage: number;
   /** Lobbed or fired from the air: flies over trees and walls and lands at the end of its range. */
   air?: boolean;
+  /** Can hit the helicopter. */
+  hitsAir?: boolean;
+  /** Steers toward a target: a fixed one, or whatever heat source is nearest. */
+  homing?: 'target' | 'heat';
+  turnRate?: number;
   clearsTrees?: boolean;
   destroysBridges?: boolean;
   destroysMines?: boolean;
@@ -153,5 +192,25 @@ export const SHOTS = {
     destroysMines: true,
   },
   grenade: { speed: 0.12, range: 3, damage: 20, air: true, clearsTrees: true },
+  turretShell: { speed: 0.3, range: 7, damage: 20, clearsTrees: true },
+  turretMissile: {
+    speed: 0.16,
+    range: 12,
+    damage: 45,
+    air: true,
+    hitsAir: true,
+    homing: 'target',
+    turnRate: 0.06,
+  },
+  // the submarine's heat-seeker: hits anything, and whatever it hits is toast (SPEC §8.4)
+  subMissile: {
+    speed: 0.2,
+    range: 80,
+    damage: 1000,
+    air: true,
+    hitsAir: true,
+    homing: 'heat',
+    turnRate: 0.07,
+  },
 } as const satisfies Record<string, ShotTuning>;
 export type ShotKind = keyof typeof SHOTS;

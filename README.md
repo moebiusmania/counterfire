@@ -28,4 +28,4 @@ bun run dev        # http://localhost:3000, add ?players=2 for split-screen
 | Switch: centre turret / change weapon | K | Numpad Enter |
 | Self-destruct | H + J + K | − + Enter |
 
-Dev URLs: `?players=2` for split-screen, `?showcase` to view all vehicle models, `?seed=N` for a fixed seed.
+Dev URLs: `?players=2` for split-screen, `?showcase` for a still line-up of every model, `?seed=N` for a fixed seed.

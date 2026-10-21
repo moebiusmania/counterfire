@@ -3,6 +3,7 @@
 
 import { mainCanvasSize, mainContext } from 'littlejsengine';
 import type { Bindings } from '../input/bindings';
+import { outOfBounds } from '../sim/submarine';
 import { BUNKER } from '../sim/tuning';
 import type { PlayerId, VehicleType } from '../sim/types';
 import { type PlayerState, VEHICLE_ORDER, type World } from '../sim/world';
@@ -119,8 +120,23 @@ function drawField(ctx: Ctx, world: World, p: PlayerState, x0: number, w: number
     ctx.fillText(extra, x0 + 20, y + 58);
   }
   if (v.resupplying) centered(ctx, 'RESUPPLYING', x0 + w / 2, h * 0.2, 1);
+  const warning = dangerWarning(world, p);
+  if (warning) centered(ctx, warning, x0 + w / 2, h * 0.3, (world.tick >> 4) % 2 ? 1 : 0.5);
   if (v.onBunker)
     centered(ctx, `BUNKER LIGHT ON - ${keyLabel(keys.fireGround[0])} TO GO DOWN`, x0 + w / 2, h * 0.2, 1);
+}
+
+/** The submarine and its heat-seeker, worst first (SPEC §8.4). */
+function dangerWarning(world: World, p: PlayerState): string | undefined {
+  const v = p.vehicle;
+  if (!v) return undefined;
+  if (world.shots.some((s) => s.kind === 'subMissile' && s.target === v.id))
+    return 'HEAT-SEEKER ON YOUR TAIL!';
+  const sub = world.submarine;
+  if (sub.culprit === v.id && (sub.state === 'surfacing' || sub.state === 'aiming'))
+    return 'SUBMARINE SURFACING!';
+  if (outOfBounds(world, v.x, v.y)) return 'DESERTER! RETURN TO YOUR SECTOR';
+  return undefined;
 }
 
 function vehicleExtras(world: World, p: PlayerState): string | undefined {

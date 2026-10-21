@@ -74,14 +74,6 @@ export function buildFlagTower(team: Team): Mesh {
   return m;
 }
 
-export function buildTurret(team: Team): Mesh {
-  const m = new Mesh();
-  m.combine(buildCylinder(0.7, 0.35, 10), vec3(0, 0.18, 0), rgb(0.45, 0.45, 0.42));
-  m.combine(buildBox(vec3(0.4, 0.25, 0.45)), vec3(0, 0.48, 0), TEAM_COLORS[team]);
-  m.combine(buildCylinder(0.08, 0.5, 6), buildMatrix(vec3(0, 0.5, -0.4), vec3(Math.PI / 2, 0, 0)), STEEL);
-  return m;
-}
-
 export function buildDepot(kind: 'fuelDepot' | 'ammoTent', team: Team): Mesh {
   const m = new Mesh();
   if (kind === 'fuelDepot') {
@@ -193,4 +185,104 @@ export function buildMine(): Mesh {
 /** The bunker light: a lamp on the pad that glows while the player can go down (SPEC §6). */
 export function buildBunkerLamp(): Mesh {
   return new Mesh().combine(buildSphere(0.16, 8, 6), vec3(), WHITE);
+}
+
+/** Generic buildings by level variant: a house with a pitched roof, a long barracks, a hangar. */
+export function buildBuilding(variant: string | undefined, team: Team): Mesh {
+  const m = new Mesh();
+  const wall = rgb(0.72, 0.66, 0.55);
+  const roof = team === 'NEUTRAL' ? rgb(0.55, 0.25, 0.18) : TEAM_COLORS[team];
+  switch (variant) {
+    case 'barracks':
+      m.combine(buildBox(vec3(0.95, 0.5, 0.6), 0.02), vec3(0, 0.25, 0), rgb(0.5, 0.52, 0.4));
+      m.combine(buildBox(vec3(1.0, 0.06, 0.66)), vec3(0, 0.53, 0), DARK);
+      break;
+    case 'hangar': {
+      const shell = buildCylinder(0.9, 0.9, 10);
+      shell.transform(buildMatrix(vec3(0, 0, 0), vec3(Math.PI / 2, 0, 0)));
+      m.combine(shell, buildMatrix(vec3(0, 0.05, 0), vec3(), vec3(1, 0.8, 1)), rgb(0.55, 0.57, 0.55));
+      m.combine(buildBox(vec3(0.5, 0.4, 0.02)), vec3(0, 0.2, -0.46), DARK);
+      break;
+    }
+    default:
+      m.combine(buildBox(vec3(0.8, 0.5, 0.7), 0.02), vec3(0, 0.25, 0), wall);
+      m.combine(
+        buildCone(1.05, 0.4, 4),
+        buildMatrix(vec3(0, 0.7, 0), vec3(0, Math.PI / 4, 0), vec3(1, 1, 0.85)),
+        roof,
+      );
+      m.combine(buildBox(vec3(0.16, 0.26, 0.02)), vec3(0.15, 0.13, -0.36), DARK); // door
+  }
+  return m;
+}
+
+/** What a destroyed structure leaves: a low heap of broken blocks. */
+export function buildRubble(): Mesh {
+  const m = new Mesh();
+  const blocks: [number, number, number, number][] = [
+    [-0.2, -0.15, 0.3, 0.18],
+    [0.18, -0.1, 0.26, 0.14],
+    [0, 0.2, 0.34, 0.12],
+    [-0.25, 0.2, 0.2, 0.1],
+    [0.25, 0.25, 0.18, 0.08],
+  ];
+  blocks.forEach(([x, z, size, h], i) => {
+    m.combine(
+      buildBox(vec3(size, h, size * 0.8)),
+      buildMatrix(vec3(x, h / 2, z), vec3(0, i * 0.7, 0)),
+      i % 2 ? rgb(0.35, 0.32, 0.28) : rgb(0.25, 0.23, 0.2),
+    );
+  });
+  return m;
+}
+
+export interface TurretMeshes {
+  base: Mesh;
+  head: Mesh;
+}
+
+/** Turrets: a gun turret has one barrel, a missile turret a box launcher; the head turns. */
+export function buildTurretParts(variant: 'gun' | 'missile', team: Team): TurretMeshes {
+  const base = new Mesh();
+  base.combine(buildCylinder(0.75, 0.35, 10), vec3(0, 0.18, 0), rgb(0.45, 0.45, 0.42));
+  base.combine(buildCylinder(0.8, 0.04, 10), vec3(0, 0.36, 0), TEAM_COLORS[team]);
+  const head = new Mesh();
+  if (variant === 'missile') {
+    head.combine(buildBox(vec3(0.3, 0.2, 0.3)), vec3(0, 0.1, 0), rgb(0.4, 0.42, 0.38));
+    for (const side of [-1, 1])
+      head.combine(buildBox(vec3(0.16, 0.16, 0.5)), vec3(side * 0.2, 0.22, -0.05), STEEL);
+  } else {
+    head.combine(buildBox(vec3(0.4, 0.25, 0.45), 0.03), vec3(0, 0.12, 0), rgb(0.4, 0.42, 0.38));
+    head.combine(
+      buildCylinder(0.08, 0.55, 6),
+      buildMatrix(vec3(0, 0.15, -0.45), vec3(Math.PI / 2, 0, 0)),
+      STEEL,
+    );
+  }
+  return { base, head };
+}
+
+/** A soldier, about a quarter of a tile tall, standing on the origin and facing -Z. */
+export function buildSoldier(team: Team): Mesh {
+  const m = new Mesh();
+  const uniform = team === 'NEUTRAL' ? rgb(0.55, 0.5, 0.35) : TEAM_COLORS[team];
+  m.combine(buildBox(vec3(0.05, 0.1, 0.05)), vec3(-0.03, 0.05, 0), DARK); // legs
+  m.combine(buildBox(vec3(0.05, 0.1, 0.05)), vec3(0.03, 0.05, 0), DARK);
+  m.combine(buildBox(vec3(0.12, 0.12, 0.07)), vec3(0, 0.16, 0), uniform);
+  m.combine(buildSphere(0.07, 6, 4), vec3(0, 0.26, 0), rgb(0.85, 0.65, 0.5));
+  m.combine(buildBox(vec3(0.03, 0.12, 0.03)), vec3(0.08, 0.26, 0), uniform); // raised arm, to wave
+  return m;
+}
+
+/** The submarine: a long dark hull with a conning tower, facing -Z. */
+export function buildSubmarine(): Mesh {
+  const m = new Mesh();
+  m.combine(
+    buildSphere(1, 12, 8),
+    buildMatrix(vec3(0, 0, 0), vec3(), vec3(0.6, 0.45, 3)),
+    rgb(0.12, 0.13, 0.15),
+  );
+  m.combine(buildBox(vec3(0.3, 0.5, 0.7), 0.05), vec3(0, 0.35, -0.2), rgb(0.15, 0.16, 0.18));
+  m.combine(buildBox(vec3(0.8, 0.04, 0.2)), vec3(0, 0.45, -0.3), rgb(0.15, 0.16, 0.18));
+  return m;
 }

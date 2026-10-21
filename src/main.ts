@@ -2,7 +2,8 @@
 //
 // Milestone 2 build: players start in the bunker on training-01 and pick a vehicle.
 // `?players=2` adds a second player for split-screen and two-player rules (mines).
-// `?showcase` parks one of each vehicle by the bunker under a close camera, to check the models.
+// `?showcase` freezes a line-up of every vehicle, structure and soldier under a close camera,
+// to check the models.
 
 import {
   engineInit,
@@ -38,6 +39,18 @@ let players: PlayerId[];
 /** training-01 is a one-player map; for the split-screen test, put a P2 bunker on the far road. */
 function loadLevel(): Level {
   const level = structuredClone(training01) as Level;
+  if (showcase) {
+    const b = level.entities.find((e) => e.id === 'p1-bunker');
+    const y = (b?.y ?? 0) + 4;
+    const x = (b?.x ?? 0) - 2.4;
+    level.entities.push(
+      { id: 'sc-house', type: 'building', team: 'NEUTRAL', variant: 'house', x, y },
+      { id: 'sc-barracks', type: 'building', team: 'CPU', variant: 'barracks', x: x + 1.6, y },
+      { id: 'sc-gun', type: 'turret', team: 'P1', variant: 'gun', x: x + 3.2, y, rot: 0.6 },
+      { id: 'sc-missile', type: 'turret', team: 'P1', variant: 'missile', x: x + 4.8, y, rot: -0.6 },
+      { id: 'sc-rubble', type: 'building', team: 'NEUTRAL', x: x + 6.4, y },
+    );
+  }
   if (!twoPlayers) return level;
   level.players = 2;
   level.entities.push({ id: 'p2-bunker', type: 'bunker', team: 'P2', x: 30.5, y: 18.5, rot: Math.PI });
@@ -92,9 +105,24 @@ function parkShowcase() {
   p.vehicle = undefined;
   p.mode = 'field';
   p.lostTimer = Number.POSITIVE_INFINITY;
+  const rubble = world.structures.find((s) => s.entity.id === 'sc-rubble');
+  if (rubble) world.damageStructure(rubble, rubble.hp);
+  world.soldiers.splice(0); // the rubble's occupants; the line-up below replaces them
+  Object.assign(world.submarine, {
+    state: 'aiming',
+    surfaced: 1,
+    x: bunker.x + 3.4,
+    y: bunker.y + 0.6,
+    heading: 1.2,
+  });
+  for (let i = 0; i < 4; i++) {
+    const s = world.spawnSoldier(i % 2 ? 'CPU' : 'NEUTRAL', bunker.x - 1.5 + i * 0.5, bunker.y + 0.9);
+    s.state = i === 3 ? 'dead' : i % 2 ? 'waving' : 'running';
+  }
 }
 
 function gameUpdate() {
+  if (showcase) return; // a still line-up
   const inputs: Partial<Record<PlayerId, InputFrame>> = {};
   for (const p of players) inputs[p] = readInput(bindings[p]);
   world.step(inputs);

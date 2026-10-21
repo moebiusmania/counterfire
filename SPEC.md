@@ -2,7 +2,7 @@
 
 **Counterfire** is a browser game that remakes **Return Fire** (Silent Software, 3DO 1995 / Windows 95 1996) and matches the original's gameplay feature for feature. It is built with **Bun**, **TypeScript** and **LittleJS**. Its levels and 3D models are new, made in the style of the original.
 
-> **Status:** v0.4, 2026-10-21. Milestones 0 to 2 are done (§15).
+> **Status:** v0.5, 2026-10-22. Milestones 0 to 3 are done (§15).
 > **Name:** Counterfire (§12.3).
 > **Source of truth for behaviour:** the original Windows 95 release. Where this spec and the original disagree on rules or mechanics, the original wins and this spec gets corrected. Levels and models deliberately differ from the original (§10, §12). Items marked **[VERIFY]** are not confirmed by a primary source yet. Someone must check them against the original game (by playing it or using the manual) before they count as final.
 
@@ -229,6 +229,19 @@ CPU-controlled hostile units in single-player. **[VERIFY]** whether they fly or 
 - If any vehicle leaves the playable bounds ("special provisions for deserters"), a submarine surfaces offshore and fires a **heat-seeking missile**. The submarine **cannot be destroyed**.
 - The missile is truly heat-seeking: **it locks onto whatever heat source is closest to it**, including drones, the enemy player, or the vehicle that caused the sub to surface. Implement it as re-targeting the nearest valid heat source each tick. This makes it possible to use the missile tactically, as the manual describes.
 
+### 8.4a Working assumptions (milestone 3)
+Each choice below is **[VERIFY]** against the original. The numbers are in `src/sim/tuning.ts`.
+
+| Topic | Current behaviour |
+|---|---|
+| Structure toughness | Flag tower 120 HP, building 60, turret 80, fuel depot 60, ammo tent 50. The bunker cannot be destroyed. Walls stay indestructible. |
+| Structures in play | Intact structures block land vehicles and ground shots. Air shots (helicopter, grenades) damage whatever structure they land on. A destroyed structure leaves rubble that can be driven over, and a destroyed depot stops serving. |
+| Building variants | `house`, `barracks` and `hangar`, chosen by the level entity's `variant`. |
+| Soldiers | 2 to 4 run out of a destroyed building or flag tower. They flee vehicles within 4 tiles, otherwise wander or wave. Any blast, or a moving land vehicle, kills them. A driver who bails out walks back to the bunker and disappears into it. |
+| Turrets | Variant `gun` has range 6, fires shells, and cannot hit the helicopter. Variant `missile` has range 8 and fires homing missiles that can. Each aims at the nearest enemy vehicle in range. CPU turrets attack both players; a player's turrets attack the other player. |
+| Submarine | Surfaces 4 tiles beyond the edge, toward whoever left the bounds, aims for 0.75 s, fires, then dives. Only one heat-seeker flies at a time. The missile retargets every tick to the nearest active vehicle, whoever's it is, and destroys whatever it hits. |
+| Friendly fire | Shots hurt everything except the vehicle or turret that fired them. |
+
 ### 8.5 Destruction persistence
 All terrain and structure changes persist for the whole round and appear on the bunker map.
 
@@ -428,7 +441,7 @@ For each item in §6 to §11, record a side-by-side clip of the original and the
 | 0 | **Spike** ✅ | 3D path chosen (§3.2), split-screen proof. A glTF proof waits for the first recreated model (M8). |
 | 1 | **Sim core** ✅ | tank drives on a test map, fixed-step sim, deterministic replay test |
 | 2 | **All vehicles** ✅ | 4 vehicles with weapons, fuel, ammo, damage, bunker loop |
-| 3 | **World** | structures, destruction, turrets, depots, bridges, soldiers, submarine |
+| 3 | **World** ✅ | structures, destruction, turrets, depots, bridges, soldiers, submarine |
 | 4 | **Rules** | flags, capture, win/loss, stock, 1P vs CPU with drones |
 | 5 | **2-player** | split-screen, mines, flag-defence behaviours |
 | 6 | **UI/Audio** | bunker, map, radar, HUD, beacon, SFX, skull, victory |

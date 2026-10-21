@@ -2,9 +2,13 @@
 
 import type { Level, LevelEntity, Stock } from '../levels/schema';
 import { Rng } from './rng';
-import { blocksShots, Terrain, Tile } from './terrain';
-import { BUNKER, DEPOT, MINES, type ShotKind, type ShotTuning } from './tuning';
-import { EMPTY_INPUT, type InputFrame, type PlayerId, type VehicleType } from './types';
+import { Soldier, updateSoldier } from './soldiers';
+import { Structure } from './structures';
+import { Submarine, updateSubmarine } from './submarine';
+import { blocksShots, type Collider, type Mobility, Terrain, Tile } from './terrain';
+import { BUNKER, DEPOT, MINES, type ShotKind, type ShotTuning, SOLDIERS, STRUCTURES } from './tuning';
+import { headingTo, updateTurret } from './turrets';
+import { EMPTY_INPUT, type InputFrame, type PlayerId, type Team, type VehicleType, wrapAngle } from './types';
 import { updateAsv } from './vehicles/asv';
 import { updateHeli } from './vehicles/heli';
 import { updateJeep } from './vehicles/jeep';
@@ -22,6 +26,7 @@ const WRECK_TICKS = 180;
 export interface Shot {
   id: number;
   kind: ShotKind;
+  /** Id of the vehicle or structure that fired it, -1 for the submarine. */
   owner: number;
   x: number;
   y: number;
@@ -32,6 +37,8 @@ export interface Shot {
   travelled: number;
   tuning: ShotTuning;
   alive: boolean;
+  /** The vehicle a homing missile is chasing right now. */
+  target?: number;
 }
 
 export interface Mine {
@@ -49,6 +56,11 @@ export type SimEvent =
   | { type: 'bridgeDestroyed'; x: number; y: number }
   | { type: 'vehicleHit'; vehicle: number; damage: number }
   | { type: 'vehicleDestroyed'; vehicle: number; x: number; y: number }
+  | { type: 'structureHit'; structure: number; damage: number }
+  | { type: 'structureDestroyed'; structure: number; x: number; y: number }
+  | { type: 'soldierKilled'; soldier: number; x: number; y: number; crushed: boolean }
+  | { type: 'subSurfacing'; x: number; y: number; vehicle: number }
+  | { type: 'subFired'; x: number; y: number }
   | { type: 'sank'; vehicle: number; x: number; y: number }
   | { type: 'heliCrash'; vehicle: number; x: number; y: number }
   | { type: 'outOfFuel'; vehicle: number }
@@ -88,17 +100,19 @@ function pressedSince(now: InputFrame, before: InputFrame): InputFrame {
   return out;
 }
 
-export class World {
+export class World implements Collider {
   readonly rng: Rng;
   readonly terrain: Terrain;
   readonly players = new Map<PlayerId, PlayerState>();
   readonly vehicles: Vehicle[] = [];
+  readonly structures: Structure[] = [];
+  readonly soldiers: Soldier[] = [];
   readonly shots: Shot[] = [];
   readonly mines: Mine[] = [];
+  readonly submarine = new Submarine();
   events: SimEvent[] = [];
   tick = 0;
   private nextId = 1;
-  private readonly depots: LevelEntity[];
 
   constructor(
     readonly level: Level,
@@ -106,7 +120,9 @@ export class World {
   ) {
     this.rng = new Rng(seed);
     this.terrain = new Terrain(level.tiles);
-    this.depots = level.entities.filter((e) => e.type === 'fuelDepot' || e.type === 'ammoTent');
+    for (const e of level.entities) {
+      if (e.type !== 'droneSpawn') this.structures.push(new Structure(this.nextId++, e));
+    }
     const ids: PlayerId[] = level.players === 1 ? ['P1'] : ['P1', 'P2'];
     for (const id of ids) {
       const bunker = level.entities.find((e) => e.type === 'bunker' && e.team === id);
@@ -137,6 +153,19 @@ export class World {
     const p = this.players.get(id);
     if (!p) throw new Error(`no player ${id}`);
     return p;
+  }
+
+  /** Neutral things are nobody's enemy. */
+  areEnemies(a: Team, b: Team): boolean {
+    return a !== b && a !== 'NEUTRAL' && b !== 'NEUTRAL';
+  }
+
+  /** Terrain plus intact structures: what a land vehicle or a soldier can stand on. */
+  fits(x: number, y: number, r: number, mobility: Mobility): boolean {
+    if (!this.terrain.fits(x, y, r, mobility)) return false;
+    if (mobility === 'air') return true;
+    for (const s of this.structures) if (s.solid && s.overlapsCircle(x, y, r)) return false;
+    return true;
   }
 
   /** Put a vehicle straight onto the bunker pad, ready to drive. Tests and tools only: no stock, no elevator. */
@@ -170,6 +199,24 @@ export class World {
     return shot;
   }
 
+  spawnSoldier(team: Team, x: number, y: number): Soldier {
+    const s = new Soldier(
+      this.nextId++,
+      team,
+      x,
+      y,
+      this.rng.range(-Math.PI, Math.PI),
+      30 + this.rng.int(60),
+    );
+    this.soldiers.push(s);
+    return s;
+  }
+
+  removeSoldier(s: Soldier): void {
+    const i = this.soldiers.indexOf(s);
+    if (i >= 0) this.soldiers.splice(i, 1);
+  }
+
   layMine(v: Vehicle, x: number, y: number): void {
     const mine: Mine = { id: this.nextId++, team: v.team, x, y };
     this.mines.push(mine);
@@ -192,9 +239,12 @@ export class World {
 
     this.updateBunkerLights();
     this.updateDepots();
+    for (const s of this.structures) if (s.type === 'turret' && !s.destroyed) updateTurret(s, this);
+    updateSubmarine(this.submarine, this);
     this.updateShots();
     this.separateVehicles();
     this.updateMines();
+    this.updateSoldiers();
     this.sinkVehicles();
     this.clearWrecks();
     for (let i = this.shots.length; i--; ) if (!this.shots[i]?.alive) this.shots.splice(i, 1);
@@ -314,8 +364,9 @@ export class World {
       v.resupplying = false;
       // the helicopter can only refuel and rearm at its own base
       if (!v.controllable || v.type === 'heli' || Math.abs(v.speed) > DEPOT.maxParkSpeed) continue;
-      for (const d of this.depots) {
-        if (d.team && d.team !== v.team && d.team !== 'NEUTRAL') continue;
+      for (const d of this.structures) {
+        if ((d.type !== 'fuelDepot' && d.type !== 'ammoTent') || d.destroyed) continue;
+        if (this.areEnemies(d.team, v.team)) continue;
         if (Math.hypot(v.x - d.x, v.y - d.y) > DEPOT.radius) continue;
         const fuel = d.type === 'fuelDepot';
         const full = fuel ? v.fuel >= v.tuning.fuel : v.ammo >= v.tuning.ammo;
@@ -323,7 +374,12 @@ export class World {
         if (fuel) v.fuel = Math.min(v.tuning.fuel, v.fuel + DEPOT.fuelPerTick);
         else if (this.tick % DEPOT.ticksPerRound === 0) v.ammo++;
         v.resupplying = true;
-        if (!was) this.emit({ type: 'resupply', vehicle: v.id, depot: fuel ? 'fuelDepot' : 'ammoTent' });
+        if (!was)
+          this.emit({
+            type: 'resupply',
+            vehicle: v.id,
+            depot: d.type === 'fuelDepot' ? 'fuelDepot' : 'ammoTent',
+          });
         break;
       }
     }
@@ -337,6 +393,7 @@ export class World {
     for (const s of this.shots) {
       s.prevX = s.x;
       s.prevY = s.y;
+      if (s.tuning.homing) this.steer(s);
       for (let k = 0; k < SUBSTEPS && s.alive; k++) {
         s.x += s.dx / SUBSTEPS;
         s.y += s.dy / SUBSTEPS;
@@ -346,29 +403,74 @@ export class World {
     }
   }
 
+  /**
+   * Turn a missile toward its target. The submarine's heat-seeker really seeks heat: each tick
+   * it chases whatever hot vehicle is nearest to it, whoever that is (SPEC §8.4).
+   */
+  private steer(s: Shot): void {
+    let target: Vehicle | undefined;
+    if (s.tuning.homing === 'heat') {
+      let best = Number.POSITIVE_INFINITY;
+      for (const v of this.vehicles) {
+        if (!v.controllable) continue;
+        const d = Math.hypot(v.x - s.x, v.y - s.y);
+        if (d < best) {
+          best = d;
+          target = v;
+        }
+      }
+      s.target = target?.id;
+    } else {
+      target = this.vehicles.find((v) => v.id === s.target && v.controllable);
+    }
+    if (!target) return;
+    const heading = Math.atan2(-s.dx, s.dy);
+    const diff = wrapAngle(headingTo(s.x, s.y, target.x, target.y) - heading);
+    const turn = s.tuning.turnRate ?? 0;
+    const next = heading + Math.max(-turn, Math.min(turn, diff));
+    s.dx = -Math.sin(next) * s.tuning.speed;
+    s.dy = Math.cos(next) * s.tuning.speed;
+  }
+
   private collideShot(s: Shot): void {
     for (const v of this.vehicles) {
-      // nothing can hit the helicopter yet: turrets and drones arrive in milestone 3
-      if (v.id === s.owner || !v.alive || v.mobility === 'air' || v.elevator > 0.5) continue;
+      if (v.id === s.owner || !v.alive || v.elevator > 0.5) continue;
+      if (v.mobility === 'air' && !s.tuning.hitsAir) continue;
       const r = v.tuning.radius;
       if ((v.x - s.x) ** 2 + (v.y - s.y) ** 2 < r * r) {
         this.damageVehicle(v, s.tuning.damage);
-        this.explodeShot(s, 0.6);
+        this.explodeShot(s, s.kind === 'subMissile' ? 1.4 : 0.6);
         return;
       }
     }
 
     const tx = Math.floor(s.x);
     const ty = Math.floor(s.y);
-    if (!s.tuning.air && blocksShots(this.terrain.get(tx, ty))) {
-      this.impact(s, tx, ty);
-      this.explodeShot(s, 0.6);
-      return;
+    if (!s.tuning.air) {
+      const hit = this.structureAt(s.x, s.y, s.owner);
+      if (hit) {
+        this.damageStructure(hit, s.tuning.damage);
+        this.explodeShot(s, 0.6);
+        return;
+      }
+      if (blocksShots(this.terrain.get(tx, ty))) {
+        this.impact(s, tx, ty);
+        this.explodeShot(s, 0.6);
+        return;
+      }
     }
     if (s.travelled >= s.tuning.range) {
-      if (s.tuning.air) this.impact(s, tx, ty);
+      if (s.tuning.air && !s.tuning.homing) {
+        this.impact(s, tx, ty);
+        const hit = this.structureAt(s.x, s.y, s.owner);
+        if (hit) this.damageStructure(hit, s.tuning.damage);
+      }
       this.explodeShot(s, s.kind === 'heliGun' ? 0.15 : 0.4);
     }
+  }
+
+  private structureAt(x: number, y: number, ignore: number): Structure | undefined {
+    return this.structures.find((t) => t.solid && t.id !== ignore && t.contains(x, y));
   }
 
   /** What a shot does to the ground where it lands. */
@@ -386,12 +488,69 @@ export class World {
 
   private explodeShot(s: Shot, size: number): void {
     s.alive = false;
-    this.emit({ type: 'explosion', x: s.x, y: s.y, size });
+    this.explode(s.x, s.y, size);
+  }
+
+  /** A blast: the effect, and any soldier caught in it dies. */
+  private explode(x: number, y: number, size: number): void {
+    this.emit({ type: 'explosion', x, y, size });
+    const r = Math.max(0.35, size * 0.6);
+    for (const s of this.soldiers) {
+      if (s.state !== 'dead' && Math.hypot(s.x - x, s.y - y) < r) this.killSoldier(s, false);
+    }
   }
 
   private destroyBridge(tx: number, ty: number): void {
     this.terrain.set(tx, ty, Tile.Deep);
     this.emit({ type: 'bridgeDestroyed', x: tx + 0.5, y: ty + 0.5 });
+  }
+
+  // --- structures (SPEC §8.2) ---
+
+  damageStructure(t: Structure, damage: number): void {
+    if (t.destroyed) return;
+    t.hp -= damage;
+    this.emit({ type: 'structureHit', structure: t.id, damage });
+    if (t.hp > 0) return;
+    t.hp = 0;
+    t.destroyed = true;
+    this.emit({ type: 'structureDestroyed', structure: t.id, x: t.x, y: t.y });
+    this.explode(t.x, t.y, 1.8);
+    // it leaves rubble, and the people inside run out
+    const tx = Math.floor(t.x);
+    const ty = Math.floor(t.y);
+    if (this.terrain.get(tx, ty) !== Tile.Deep) this.terrain.set(tx, ty, Tile.Rubble);
+    if (t.type === 'building' || t.type === 'flagTower') {
+      const [min, max] = STRUCTURES.soldiers;
+      const count = min + this.rng.int(max - min + 1);
+      for (let i = 0; i < count; i++) {
+        this.spawnSoldier(t.team, t.x + this.rng.range(-0.3, 0.3), t.y + this.rng.range(-0.3, 0.3));
+      }
+    }
+  }
+
+  // --- soldiers ---
+
+  private updateSoldiers(): void {
+    for (const s of [...this.soldiers]) updateSoldier(s, this);
+    // land vehicles on the move run soldiers over
+    for (const v of this.vehicles) {
+      if (!v.controllable || v.mobility === 'air' || Math.abs(v.speed) < 0.005) continue;
+      for (const s of this.soldiers) {
+        if (s.state === 'dead') continue;
+        if (Math.hypot(s.x - v.x, s.y - v.y) < v.tuning.radius + SOLDIERS.radius) this.killSoldier(s, true);
+      }
+    }
+    for (let i = this.soldiers.length; i--; ) {
+      const s = this.soldiers[i] as Soldier;
+      if (s.state === 'dead' && s.timer <= 0) this.soldiers.splice(i, 1);
+    }
+  }
+
+  private killSoldier(s: Soldier, crushed: boolean): void {
+    s.state = 'dead';
+    s.timer = SOLDIERS.corpseTicks;
+    this.emit({ type: 'soldierKilled', soldier: s.id, x: s.x, y: s.y, crushed });
   }
 
   // --- mines ---
@@ -417,7 +576,7 @@ export class World {
     if (i < 0) return;
     this.mines.splice(i, 1);
     this.emit({ type: 'mineExploded', mine: m.id, x: m.x, y: m.y });
-    this.emit({ type: 'explosion', x: m.x, y: m.y, size: 1 });
+    this.explode(m.x, m.y, 1);
     const tx = Math.floor(m.x);
     const ty = Math.floor(m.y);
     // a mine on a bridge takes the bridge with it (SPEC §6.2)
@@ -433,13 +592,16 @@ export class World {
     if (v.hp <= 0) this.destroyVehicle(v);
   }
 
-  /** Out of fuel and stopped: the driver flees on foot and the vehicle stays where it is (SPEC §6). */
+  /** Out of fuel and stopped: the driver flees on foot toward the bunker (SPEC §6). */
   abandonVehicle(v: Vehicle): void {
     if (v.state !== 'active') return;
     v.state = 'abandoned';
     v.onBunker = false;
     this.emit({ type: 'driverBailed', vehicle: v.id, x: v.x, y: v.y });
-    for (const p of this.players.values()) if (p.vehicle === v) p.lostTimer = BUNKER.lostDelay;
+    const p = this.players.get(v.team);
+    const driver = this.spawnSoldier(v.team, v.x + 0.5, v.y);
+    if (p) driver.home = { x: p.bunker.x, y: p.bunker.y };
+    for (const q of this.players.values()) if (q.vehicle === v) q.lostTimer = BUNKER.lostDelay;
   }
 
   destroyVehicle(v: Vehicle): void {
@@ -449,7 +611,7 @@ export class World {
     v.speed = 0;
     v.onBunker = false;
     this.emit({ type: 'vehicleDestroyed', vehicle: v.id, x: v.x, y: v.y });
-    this.emit({ type: 'explosion', x: v.x, y: v.y, size: 1.6 });
+    this.explode(v.x, v.y, 1.6);
     for (const p of this.players.values()) if (p.vehicle === v) p.lostTimer = BUNKER.lostDelay;
   }
 
@@ -478,8 +640,8 @@ export class World {
         // coincident centres: push along x
         const nx = d > 1e-9 ? dx / d : 1;
         const ny = d > 1e-9 ? dy / d : 0;
-        a.moveBy(this.terrain, -nx * overlap * 0.5, -ny * overlap * 0.5);
-        b.moveBy(this.terrain, nx * overlap * 0.5, ny * overlap * 0.5);
+        a.moveBy(this, -nx * overlap * 0.5, -ny * overlap * 0.5);
+        b.moveBy(this, nx * overlap * 0.5, ny * overlap * 0.5);
       }
     }
   }
@@ -518,8 +680,12 @@ export class World {
         .num(v.tyresInflated ? 1 : 0)
         .num(v.wreckTicks);
     }
-    for (const s of this.shots) h.num(s.id).num(s.x).num(s.y).num(s.travelled);
+    for (const t of this.structures) h.num(t.id).num(t.hp).num(t.aim).num(t.cooldown);
+    for (const s of this.soldiers) h.num(s.id).str(s.state).num(s.x).num(s.y).num(s.heading).num(s.timer);
+    for (const s of this.shots) h.num(s.id).num(s.x).num(s.y).num(s.dx).num(s.dy).num(s.travelled);
     for (const m of this.mines) h.num(m.id).num(m.x).num(m.y);
+    const sub = this.submarine;
+    h.str(sub.state).num(sub.x).num(sub.y).num(sub.timer).num(sub.surfaced);
     return h.digest();
   }
 }

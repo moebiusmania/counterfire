@@ -40,7 +40,12 @@ export function blocksShots(tile: TileChar): boolean {
   return tile === Tile.Forest || tile === Tile.Wall;
 }
 
-export class Terrain {
+/** Anything that can say whether a circle fits at a spot: the terrain alone, or the world with its structures. */
+export interface Collider {
+  fits(px: number, py: number, radius: number, mobility: Mobility): boolean;
+}
+
+export class Terrain implements Collider {
   readonly w: number;
   readonly h: number;
   private readonly cells: TileChar[];
@@ -83,7 +88,7 @@ export class Terrain {
   }
 
   /** Can a circle of `radius` at (px, py) stand here? */
-  circleFits(px: number, py: number, radius: number, mobility: Mobility): boolean {
+  fits(px: number, py: number, radius: number, mobility: Mobility): boolean {
     if (mobility === 'air') return true;
     const x0 = Math.floor(px - radius);
     const x1 = Math.floor(px + radius);

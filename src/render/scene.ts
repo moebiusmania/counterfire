@@ -11,13 +11,15 @@ import {
   vec3,
 } from 'littlejsengine';
 import { playSfx } from '../audio/sfx';
-import type { LevelEntity } from '../levels/schema';
+import type { Soldier } from '../sim/soldiers';
+import type { Structure } from '../sim/structures';
 import { Tile } from '../sim/terrain';
 import { HELI } from '../sim/tuning';
 import type { Vehicle } from '../sim/vehicles/vehicle';
 import type { Shot, SimEvent, World } from '../sim/world';
 import {
   buildAsv,
+  buildBuilding,
   buildBunker,
   buildBunkerLamp,
   buildDepot,
@@ -25,8 +27,11 @@ import {
   buildHeli,
   buildJeep,
   buildMine,
+  buildRubble,
+  buildSoldier,
+  buildSubmarine,
   buildTank,
-  buildTurret,
+  buildTurretParts,
 } from './models';
 import { TerrainView, toWorld } from './terrain';
 
@@ -39,6 +44,17 @@ interface VehicleView {
   rotorAngle: number;
 }
 
+interface StructureView {
+  obj: EngineObject3D;
+  head?: EngineObject3D;
+  destroyed: boolean;
+}
+
+interface SoldierView {
+  obj: EngineObject3D;
+  phase: number;
+}
+
 const WRECK = rgb(0.18, 0.16, 0.14);
 const LAMP_ON = rgb(0.3, 1, 0.4);
 const LAMP_OFF = rgb(0.25, 0.25, 0.25);
@@ -49,11 +65,18 @@ export class SceneView {
   readonly terrain: TerrainView;
   private readonly vehicles = new Map<number, VehicleView>();
   private readonly lamps = new Map<string, EngineObject3D>();
+  private readonly structures = new Map<number, StructureView>();
+  private readonly soldiers = new Map<number, SoldierView>();
+  private readonly soldierMeshes = new Map<string, Mesh>();
   private readonly mineMesh = buildMine();
+  private readonly rubbleMesh = buildRubble();
+  private readonly sub: EngineObject3D;
 
   constructor(private readonly world: World) {
     this.terrain = new TerrainView(world.terrain);
-    for (const e of world.level.entities) this.addStructure(e);
+    for (const t of world.structures) this.addStructure(t);
+    this.sub = new EngineObject3D(toWorld(0, 0, -3), buildSubmarine());
+    this.sub.castShadow = false;
     for (const p of world.players.values()) {
       const lamp = new EngineObject3D(toWorld(p.bunker.x + 0.75, p.bunker.y + 0.75, 0.2), buildBunkerLamp());
       lamp.color = LAMP_OFF;
@@ -61,33 +84,101 @@ export class SceneView {
     }
   }
 
-  private addStructure(e: LevelEntity): void {
-    const team = e.team ?? 'NEUTRAL';
+  private addStructure(t: Structure): void {
     let mesh: Mesh;
-    switch (e.type) {
+    let head: EngineObject3D | undefined;
+    switch (t.type) {
       case 'bunker':
-        mesh = buildBunker(team);
+        mesh = buildBunker(t.team);
         break;
       case 'flagTower':
-        mesh = buildFlagTower(team);
+        mesh = buildFlagTower(t.team);
         break;
-      case 'turret':
-        mesh = buildTurret(team);
+      case 'building':
+        mesh = buildBuilding(t.entity.variant, t.team);
         break;
+      case 'turret': {
+        const parts = buildTurretParts(t.turretVariant, t.team);
+        mesh = parts.base;
+        head = new EngineObject3D(vec3(0, 0.36, 0), parts.head);
+        break;
+      }
       case 'fuelDepot':
       case 'ammoTent':
-        mesh = buildDepot(e.type, team);
+        mesh = buildDepot(t.type, t.team);
         break;
-      default:
-        return; // buildings, drone spawns: milestone 3
     }
-    const obj = new EngineObject3D(toWorld(e.x, e.y), mesh);
-    obj.rotation3D = vec3(0, e.rot ?? 0, 0);
+    const obj = new EngineObject3D(toWorld(t.x, t.y), mesh);
+    obj.rotation3D = vec3(0, t.type === 'turret' ? 0 : (t.entity.rot ?? 0), 0);
+    if (head) obj.addChild(head);
+    this.structures.set(t.id, { obj, head, destroyed: false });
+  }
+
+  private syncStructures(): void {
+    for (const t of this.world.structures) {
+      const view = this.structures.get(t.id);
+      if (!view) continue;
+      if (view.head) view.head.rotation3D = vec3(0, t.aim, 0);
+      if (t.destroyed && !view.destroyed) {
+        view.destroyed = true;
+        view.head?.destroy();
+        view.head = undefined;
+        // setMesh would free the shared rubble mesh's GPU buffer when it is swapped out later
+        view.obj.mesh = this.rubbleMesh;
+        view.obj.rotation3D = vec3(0, (t.id * 1.3) % 6.28, 0);
+      }
+    }
+  }
+
+  private syncSoldiers(): void {
+    const alive = new Set<number>();
+    for (const s of this.world.soldiers) {
+      alive.add(s.id);
+      let view = this.soldiers.get(s.id);
+      if (!view) {
+        view = { obj: new EngineObject3D(toWorld(s.x, s.y), this.soldierMesh(s)), phase: (s.id * 0.37) % 1 };
+        this.soldiers.set(s.id, view);
+      }
+      view.phase += 0.25;
+      let pitch = 0;
+      let roll = 0;
+      let bob = 0;
+      if (s.state === 'dead') pitch = -Math.PI / 2;
+      else if (s.state === 'waving') roll = Math.sin(view.phase) * 0.25;
+      else bob = Math.abs(Math.sin(view.phase)) * 0.04;
+      view.obj.pos3D = toWorld(s.x, s.y, s.state === 'dead' ? 0.04 : bob);
+      view.obj.rotation3D = vec3(pitch, s.heading, roll);
+      if (s.state === 'dead') view.obj.color = rgb(0.5, 0.2, 0.18);
+    }
+    for (const [id, view] of this.soldiers) {
+      if (alive.has(id)) continue;
+      view.obj.destroy();
+      this.soldiers.delete(id);
+    }
+  }
+
+  private soldierMesh(s: Soldier): Mesh {
+    let mesh = this.soldierMeshes.get(s.team);
+    if (!mesh) {
+      mesh = buildSoldier(s.team);
+      this.soldierMeshes.set(s.team, mesh);
+    }
+    return mesh;
+  }
+
+  private syncSubmarine(): void {
+    const sub = this.world.submarine;
+    // under the waves it sits deep enough to vanish; surfaced its deck is just awash
+    this.sub.pos3D = toWorld(sub.x, sub.y, -1.6 + sub.surfaced * 1.55);
+    this.sub.rotation3D = vec3(0, sub.heading, 0);
   }
 
   /** Call once per rendered frame. */
   sync(): void {
     this.terrain.sync();
+    this.syncStructures();
+    this.syncSoldiers();
+    this.syncSubmarine();
     const alive = new Set<number>();
     for (const v of this.world.vehicles) {
       alive.add(v.id);
@@ -206,6 +297,17 @@ export class SceneView {
           explosion(e.x, e.y, e.size);
           if (e.size > 0.2) playSfx(e.size > 1 ? 'bigExplosion' : 'explosion', toWorld(e.x, e.y));
           break;
+        case 'structureDestroyed':
+          debris(e.x, e.y, rgb(0.6, 0.55, 0.45), rgb(0.3, 0.28, 0.25));
+          playSfx('collapse', toWorld(e.x, e.y));
+          break;
+        case 'soldierKilled':
+          playSfx('scream', toWorld(e.x, e.y));
+          break;
+        case 'subSurfacing':
+          splash(e.x, e.y);
+          playSfx('klaxon', toWorld(e.x, e.y));
+          break;
         case 'treeDestroyed':
           debris(e.x, e.y, rgb(0.15, 0.35, 0.12), rgb(0.35, 0.22, 0.1));
           break;
@@ -256,6 +358,10 @@ function shotHeight(s: Shot): number {
     case 'heliGun':
     case 'heliRocket':
       return HELI.flightHeight * (1 - f) + 0.15;
+    case 'turretMissile':
+      return 0.8;
+    case 'subMissile':
+      return 1.2;
     case 'grenade':
       return 0.4 + 4 * 1.2 * f * (1 - f);
     default:
@@ -270,6 +376,8 @@ function drawShot(s: Shot): void {
   switch (s.kind) {
     case 'asvRocket':
     case 'heliRocket':
+    case 'turretMissile':
+    case 'subMissile':
       render3D.drawBox(pos, vec3(0.08, 0.08, 0.38), rgb(0.85, 0.85, 0.8), vec3(0, yaw, 0));
       render3D.drawSphere(toWorld(s.x - s.dx * 0.6, s.y - s.dy * 0.6, h), 0.16, rgb(1, 0.6, 0.2));
       break;

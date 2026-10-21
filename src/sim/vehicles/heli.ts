@@ -23,13 +23,13 @@ export function updateHeli(heli: Vehicle, input: InputFrame, pressed: InputFrame
     else heli.speed = Math.sign(heli.speed) * Math.max(Math.abs(heli.speed) - t.drag, 0);
     if (input.left) heli.heading = wrapAngle(heli.heading + t.turnRate);
     if (input.right) heli.heading = wrapAngle(heli.heading - t.turnRate);
-    heli.move(world.terrain);
+    heli.move(world);
 
     // bank: slide sideways, right of the heading is (cos h, sin h)
     const strafe = (input.auxRight ? 1 : 0) - (input.auxLeft ? 1 : 0);
     if (strafe) {
       heli.moveBy(
-        world.terrain,
+        world,
         Math.cos(heli.heading) * strafe * HELI.strafeSpeed,
         Math.sin(heli.heading) * strafe * HELI.strafeSpeed,
       );

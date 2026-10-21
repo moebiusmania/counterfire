@@ -83,7 +83,56 @@
       "type": "turret",
       "team": "CPU",
       "x": 25.5,
-      "y": 18.5
+      "y": 18.5,
+      "variant": "gun"
+    },
+    {
+      "id": "town-1",
+      "type": "building",
+      "team": "NEUTRAL",
+      "variant": "house",
+      "x": 15.5,
+      "y": 11.5
+    },
+    {
+      "id": "town-2",
+      "type": "building",
+      "team": "NEUTRAL",
+      "variant": "house",
+      "x": 17.5,
+      "y": 11.5
+    },
+    {
+      "id": "town-3",
+      "type": "building",
+      "team": "NEUTRAL",
+      "variant": "house",
+      "x": 15.5,
+      "y": 10.5
+    },
+    {
+      "id": "town-4",
+      "type": "building",
+      "team": "NEUTRAL",
+      "variant": "hangar",
+      "x": 18.5,
+      "y": 10.5
+    },
+    {
+      "id": "cpu-barracks",
+      "type": "building",
+      "team": "CPU",
+      "variant": "barracks",
+      "x": 30.5,
+      "y": 21.5
+    },
+    {
+      "id": "cpu-turret-2",
+      "type": "turret",
+      "team": "CPU",
+      "variant": "missile",
+      "x": 31.5,
+      "y": 16.5
     }
   ],
   "stock": {

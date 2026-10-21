@@ -1,4 +1,4 @@
-import type { Mobility, Terrain } from '../terrain';
+import type { Collider, Mobility } from '../terrain';
 import { HELI, MINES, VEHICLES, type VehicleTuning } from '../tuning';
 import type { PlayerId, VehicleType } from '../types';
 
@@ -103,18 +103,18 @@ export class Vehicle {
    * Move by (dx, dy), sliding along whatever blocks the way.
    * Returns true when something blocked the move.
    */
-  moveBy(terrain: Terrain, dx: number, dy: number): boolean {
+  moveBy(space: Collider, dx: number, dy: number): boolean {
     const r = this.tuning.radius;
     let blocked = false;
-    if (terrain.circleFits(this.x + dx, this.y, r, this.mobility)) this.x += dx;
+    if (space.fits(this.x + dx, this.y, r, this.mobility)) this.x += dx;
     else blocked = true;
-    if (terrain.circleFits(this.x, this.y + dy, r, this.mobility)) this.y += dy;
+    if (space.fits(this.x, this.y + dy, r, this.mobility)) this.y += dy;
     else blocked = true;
     return blocked;
   }
 
   /** Move by the current speed along the heading. */
-  move(terrain: Terrain): boolean {
-    return this.moveBy(terrain, -Math.sin(this.heading) * this.speed, Math.cos(this.heading) * this.speed);
+  move(space: Collider): boolean {
+    return this.moveBy(space, -Math.sin(this.heading) * this.speed, Math.cos(this.heading) * this.speed);
   }
 }

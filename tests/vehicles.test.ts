@@ -156,7 +156,8 @@ describe('jeep', () => {
     press(world, input({ fireAir: true }));
     expect(jeep.tyresInflated).toBe(true);
     run(world, JEEP.inflateTicks);
-    run(world, 200, input({ forward: true }));
+    // drive across, stopping before it leaves the map and brings up the submarine
+    for (let i = 0; i < 200 && jeep.y < 4.5; i++) world.step({ P1: input({ forward: true }) });
     expect(jeep.y).toBeGreaterThan(4);
     expect(jeep.state).toBe('active');
   });

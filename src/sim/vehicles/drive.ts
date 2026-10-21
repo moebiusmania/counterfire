@@ -24,7 +24,7 @@ export function driveGround(v: Vehicle, input: InputFrame, world: World, maxSpee
     if (input.right) v.heading = wrapAngle(v.heading - t.turnRate);
   }
 
-  if (v.move(world.terrain)) v.speed *= 0.5;
+  if (v.move(world)) v.speed *= 0.5;
   burnFuel(v, world);
 }
 
