@@ -2,7 +2,7 @@
 
 **Counterfire** is a browser game that remakes **Return Fire** (Silent Software, 3DO 1995 / Windows 95 1996) and matches the original's gameplay feature for feature. It is built with **Bun**, **TypeScript** and **LittleJS**. Its levels and 3D models are new, made in the style of the original.
 
-> **Status:** v0.7, 2026-10-22. Milestones 0 to 5 are done (§15).
+> **Status:** v0.8, 2026-10-22. Milestones 0 to 6 are done (§15).
 > **Name:** Counterfire (§12.3).
 > **Source of truth for behaviour:** the original Windows 95 release. Where this spec and the original disagree on rules or mechanics, the original wins and this spec gets corrected. Levels and models deliberately differ from the original (§10, §12). Items marked **[VERIFY]** are not confirmed by a primary source yet. Someone must check them against the original game (by playing it or using the manual) before they count as final.
 
@@ -288,6 +288,18 @@ Shows the nearby area only: your position, enemies, drones and mines.
 - **Player death:** a laughing skull with laughter audio.
 - **Victory:** a ticker-tape celebration. Make it a new 3D or 2D animated sequence, because the original FMV cannot be shipped. In v1 it has crowd and fireworks sound effects and no music.
 
+### 9.6a Working assumptions (milestone 6)
+Each choice below is **[VERIFY]** against the original.
+
+| Topic | Current behaviour |
+|---|---|
+| Map screen | Air Fire in the bunker opens and closes it; deploying closes it. It shows the terrain as it is now, both bunkers, turrets (hollow once destroyed), flag towers (crossed out once destroyed), found flags, and the enemy player's vehicle, blinking. Never mines. |
+| Radar | Tank and ASV only; the helicopter has none. 10-tile range, north up. It shows the ground, other vehicles (enemy red, friendly green), drones, and every mine (own green, enemy yellow), with a sweep line. |
+| Dashboard | A riveted panel with segmented armour, fuel and ammo gauges, the vehicle's extras, and the radar or the jeep's beacon. |
+| Skull | Drawn in vector, laughing with a chattering jaw while the player waits to return to the bunker after a vehicle is destroyed. An abandoned vehicle shows a message instead. |
+| Victory | Ticker tape over the winner's view, a cheer and fireworks. No music. |
+| Test hook | `?test` exposes the live world as `globalThis.counterfire`, so the smoke test can stage scenes such as the skull and victory. |
+
 ### 9.7 System
 - **Esc** quits to the menu, **F3** pauses, **Alt+Enter** toggles fullscreen (Fullscreen API).
 
@@ -464,7 +476,7 @@ For each item in §6 to §11, record a side-by-side clip of the original and the
 | 3 | **World** ✅ | structures, destruction, turrets, depots, bridges, soldiers, submarine |
 | 4 | **Rules** ✅ | flags, capture, win/loss, stock, 1P vs CPU with drones |
 | 5 | **2-player** ✅ | split-screen, mines, flag-defence behaviours |
-| 6 | **UI/Audio** | bunker, map, radar, HUD, beacon, SFX, skull, victory |
+| 6 | **UI/Audio** ✅ | bunker, map, radar, HUD, beacon, SFX, skull, victory |
 | 7 | **Content** | level editor + validator, all 72 maps built and playtested (§10.2) |
 | 8 | **Art pass** | all recreated models and textures, silhouette check (§12.2) |
 | 9 | **Polish/Release** | performance targets, rebinding, gamepads, "Counterfire" trademark and domain cleared |

@@ -46,6 +46,9 @@ let bindings: Record<PlayerId, Bindings>;
 let players: PlayerId[];
 /** Last beacon colour per player, to chime when it turns green (SPEC §6.4). */
 const beacons = new Map<PlayerId, BeaconLight>();
+/** Players looking at the map in their bunker (SPEC §9.3), and last tick's Air Fire for each. */
+const mapOpen = new Set<PlayerId>();
+const lastAir = new Map<PlayerId, boolean>();
 
 function loadLevel(): Level {
   const level = getLevel(levelId) ?? getLevel(defaultLevelId(1));
@@ -93,12 +96,15 @@ function gameInit() {
 function startGame(gameSeed: number) {
   engineObjectsDestroy();
   clearBanners();
+  mapOpen.clear();
   beacons.clear();
   world = new World(loadLevel(), gameSeed);
   players = [...world.players.keys()];
   if (showcase) parkShowcase();
   scene = new SceneView(world);
   split.views = players.map((p) => new PlayerView(vehiclePos(p)));
+  // `?test` hands the browser smoke test the live world, to stage scenes that take long to play
+  if (params.has('test')) Object.assign(globalThis, { counterfire: { world } });
 }
 
 /** One of each vehicle in a row beside the P1 bunker, the helicopter flying, the jeep's tyres up. */
@@ -144,22 +150,49 @@ function gameUpdate() {
   players.forEach((p, i) => {
     inputs[p] = mergeInputs(readInput(bindings[p]), readGamepad(i));
   });
+  toggleMaps(inputs);
   world.step(inputs);
   scene.handleEvents(world.events);
   updateBanners(world, world.events);
   for (const e of world.events) {
+    if (e.type === 'vehicleDestroyed' && players.some((p) => world.players.get(p)?.vehicle?.id === e.vehicle))
+      playSfx('laugh');
     if (e.type !== 'gameOver') continue;
     // two players share one screen, so a win for either sounds like a win
     const won = e.winner !== 'CPU' && e.winner !== 'draw';
     playSfx(won ? 'victory' : 'defeat');
   }
   chimeBeacons();
+  celebrate();
 
   const o = world.outcome;
   if (o && world.tick - o.tick > GAME_OVER_TICKS) {
     if (players.some((p) => bindings[p].fireGround.some((k) => keyWasPressed(k))))
       startGame(seed + world.tick);
   }
+}
+
+/** Air Fire in the bunker opens and closes the map; leaving the bunker closes it. */
+function toggleMaps(inputs: Partial<Record<PlayerId, InputFrame>>) {
+  for (const p of players) {
+    const air = inputs[p]?.fireAir ?? false;
+    const inBunker = world.players.get(p)?.mode === 'bunker';
+    if (!inBunker) mapOpen.delete(p);
+    else if (air && !lastAir.get(p)) {
+      if (mapOpen.has(p)) mapOpen.delete(p);
+      else mapOpen.add(p);
+    }
+    lastAir.set(p, air);
+  }
+}
+
+/** Fireworks over a win for the first few seconds (SPEC §9.6); no music in v1. */
+function celebrate() {
+  const o = world.outcome;
+  if (!o || o.winner === 'CPU' || o.winner === 'draw') return;
+  const t = world.tick - o.tick;
+  if (t > 30 && t < 420 && t % 37 === 0) playSfx('firework');
+  if (t === 20) playSfx('cheer');
 }
 
 /** The jeep's beacon chimes as it swings onto the enemy flag. */
@@ -195,7 +228,7 @@ function gameRender() {
 }
 
 function gameRenderPost() {
-  if (!showcase) drawHud(world, bindings);
+  if (!showcase) drawHud(world, bindings, mapOpen);
 }
 
 engineInit(gameInit, gameUpdate, gameUpdatePost, gameRender, gameRenderPost);

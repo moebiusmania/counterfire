@@ -188,6 +188,15 @@ export const DRONES = {
   hoverHeight: 0.9,
 };
 
+/**
+ * Radar (SPEC §9.5): the armoured vehicles carry one, the jeep does not (manual). [VERIFY] the
+ * helicopter; here it has none.
+ */
+export const RADAR = {
+  range: 10,
+  vehicles: ['tank', 'asv'] as readonly VehicleType[],
+};
+
 /** Seconds of game time before a finished game takes Fire to restart. */
 export const GAME_OVER_TICKS = 120;
 

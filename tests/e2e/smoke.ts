@@ -24,7 +24,7 @@ const server = Bun.serve({
 const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 let failed = false;
 
-type Step = { press?: string[]; down?: string[]; up?: string[]; wait?: number };
+type Step = { press?: string[]; down?: string[]; up?: string[]; wait?: number; run?: string };
 
 /** Scripted sessions: each deploys vehicles from the bunker and drives them. */
 const scenarios: { name: string; query: string; steps: Step[] }[] = [
@@ -75,6 +75,35 @@ const scenarios: { name: string; query: string; steps: Step[] }[] = [
     steps: [{ wait: 1200 }, { press: ['KeyD', 'Numpad4'], wait: 300 }],
   },
   { name: 'showcase', query: '?showcase', steps: [{ wait: 1500 }] },
+  { name: 'map', query: '?players=2', steps: [{ wait: 1200 }, { press: ['KeyJ'], wait: 600 }] },
+  {
+    // a tank under radar, an enemy jeep and a mine on the scope
+    name: 'radar',
+    query: '?players=2&test',
+    steps: [
+      { wait: 1200 },
+      {
+        run: `const w = counterfire.world;
+          const t = w.spawnVehicle('P1', 'tank');
+          const j = w.spawnVehicle('P2', 'jeep'); j.x = t.x + 4; j.y = t.y + 3;
+          w.mines.push({ id: 1e6, team: 'P2', x: t.x - 3, y: t.y + 2 });`,
+        wait: 800,
+      },
+    ],
+  },
+  {
+    name: 'skull',
+    query: '?test',
+    steps: [
+      { wait: 1200 },
+      { run: `const w = counterfire.world; w.destroyVehicle(w.spawnVehicle('P1', 'tank'));`, wait: 700 },
+    ],
+  },
+  {
+    name: 'victory',
+    query: '?test',
+    steps: [{ wait: 1200 }, { run: `counterfire.world.endGame('P1', 'flagCaptured');`, wait: 1500 }],
+  },
 ];
 
 try {
@@ -92,6 +121,7 @@ try {
         await page.waitForTimeout(40);
       }
       for (const k of step.down ?? []) await page.keyboard.down(k);
+      if (step.run) await page.evaluate(step.run);
       if (step.wait) await page.waitForTimeout(step.wait);
     }
     await page.screenshot({ path: join(out, `${name}.png`) });
