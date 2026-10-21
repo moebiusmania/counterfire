@@ -220,7 +220,12 @@ function path(g: Grid, from: [number, number], to: [number, number], waterCost: 
   for (;;) {
     let u = -1;
     let best = Number.POSITIVE_INFINITY;
-    for (let i = 0; i < n; i++) if (!done[i] && (dist[i] as number) < best) best = dist[(u = i)] as number;
+    for (let i = 0; i < n; i++) {
+      if (!done[i] && (dist[i] as number) < best) {
+        best = dist[i] as number;
+        u = i;
+      }
+    }
     if (u < 0 || u === goal) break;
     done[u] = 1;
     const c = u % g.w;
@@ -255,9 +260,12 @@ function road(g: Grid, cells: [number, number][], bridges: boolean): void {
 }
 
 function forests(g: Grid, rng: Rng, count: number, keepClear: (c: number, r: number) => boolean): void {
+  const grass = cellsWhere(g, (c, r) => g.get(c, r) === Tile.Grass && !keepClear(c, r));
   for (let i = 0; i < count; i++) {
-    let c = 3 + rng.int(g.w - 6);
-    let r = 3 + rng.int(g.h - 6);
+    // start each patch on open grass, so it grows on land
+    const start = grass[rng.int(grass.length)];
+    if (!start) return;
+    let [c, r] = start;
     const size = 8 + rng.int(18);
     for (let k = 0; k < size; k++) {
       if (g.get(c, r) === Tile.Grass && !keepClear(c, r)) g.set(c, r, Tile.Forest);
@@ -387,7 +395,7 @@ function buildOnePlayer(spec: GenSpec, seed: number): Level {
   clearBorder(g, 2);
 
   // the player's bunker near the south shore, the CPU compound near the north (rule 2, rule 3)
-  const bunker = findSite(g, rng, [h - 9, h - 6], 2, w / 2 + rng.range(-w / 5, w / 5));
+  const bunker = findSite(g, rng, [h - 12, h - 8], 3, w / 2 + rng.range(-w / 5, w / 5));
   g.rect(bunker[0] - 2, bunker[1] - 2, bunker[0] + 2, bunker[1] + 2, Tile.Grass);
   const cw = 7 + 2 * rng.int(3);
   const ch = 5 + rng.int(2);
@@ -428,7 +436,7 @@ function buildOnePlayer(spec: GenSpec, seed: number): Level {
     for (let dc = -1; dc <= 1; dc++) place.reserve(bunker[0] + dc, bunker[1] + dr);
   place.place(bunker[0], bunker[1], { id: 'p1-bunker', type: 'bunker', team: 'P1', rot: 0 });
 
-  placeDepots(g, place, routes[0] ?? [], bunker, counts.depots, 'P1');
+  placeDepots(place, routes[0] ?? [], bunker, counts.depots, 'P1');
   placeTargets(g, place, bunker, spec.targets ?? 0);
 
   // flag towers: most inside the compounds, the rest out in the north
@@ -466,7 +474,7 @@ function buildOnePlayer(spec: GenSpec, seed: number): Level {
   }
   for (let i = 0; i < counts.drones; i++) {
     place.placeAny(
-      cellsWhere(g, (c, r) => r < h * 0.4),
+      cellsWhere(g, (_c, r) => r < h * 0.4),
       { id: `cpu-drones-${i + 1}`, type: 'droneSpawn', team: 'CPU' },
       0,
     );
@@ -500,7 +508,6 @@ function definedOnly(spec: GenSpec) {
 
 /** Depots by the road, the first ones close to home (rule 5). */
 function placeDepots(
-  g: Grid,
   place: Placer,
   route: [number, number][],
   home: [number, number],
@@ -606,7 +613,7 @@ function buildDuel(spec: GenSpec, seed: number): Level {
   const at = (p: [number, number]): [number, number] => [p[0], p[1] + hh];
   for (const [c, r] of routes.flat()) place.reserve(c, r + hh);
   place.place(...at(bunker), { id: 'p1-bunker', type: 'bunker', team: 'P1', rot: 0 });
-  placeDepots(full, place, (routes[2] ?? []).map(at), at(bunker), counts.depots, 'P1');
+  placeDepots(place, (routes[2] ?? []).map(at), at(bunker), counts.depots, 'P1');
 
   const towers: string[] = [];
   const total = Math.max(3, Math.min(6, counts.towers));

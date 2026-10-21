@@ -76,6 +76,10 @@ const scenarios: { name: string; query: string; steps: Step[] }[] = [
   },
   { name: 'showcase', query: '?showcase', steps: [{ wait: 1500 }] },
   { name: 'map', query: '?players=2', steps: [{ wait: 1200 }, { press: ['KeyJ'], wait: 600 }] },
+  { name: 'desert-map', query: '?level=t4-3', steps: [{ wait: 1200 }, { press: ['KeyJ'], wait: 600 }] },
+  { name: 'chessboard-map', query: '?level=t3-6', steps: [{ wait: 1200 }, { press: ['KeyJ'], wait: 600 }] },
+  { name: 'winter', query: '?level=t5-4', steps: [{ wait: 1200 }, { press: ['KeyH'], wait: 1500 }] },
+  { name: 'desert', query: '?level=t2-3', steps: [{ wait: 1200 }, { press: ['KeyH'], wait: 1500 }] },
   {
     // a tank under radar, an enemy jeep and a mine on the scope
     name: 'radar',

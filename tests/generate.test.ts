@@ -59,9 +59,9 @@ describe('generator', () => {
       const level = generateDuel({ ...spec(3, 400 + i), layout: i % 3 === 2 ? 'chessboard' : undefined });
       expect(validateLevel(level)).toEqual([]);
       const h = level.tiles.length;
-      level.tiles.forEach((row, r) =>
-        expect([...(level.tiles[h - 1 - r] ?? '')].reverse().join('')).toBe(row),
-      );
+      level.tiles.forEach((row, r) => {
+        expect([...(level.tiles[h - 1 - r] ?? '')].reverse().join('')).toBe(row);
+      });
     }
   });
 });
