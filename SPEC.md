@@ -2,7 +2,7 @@
 
 **Counterfire** is a browser game that remakes **Return Fire** (Silent Software, 3DO 1995 / Windows 95 1996) and matches the original's gameplay feature for feature. It is built with **Bun**, **TypeScript** and **LittleJS**. Its levels and 3D models are new, made in the style of the original.
 
-> **Status:** v0.8, 2026-10-22. Milestones 0 to 6 are done (§15).
+> **Status:** v0.9, 2026-10-22. Milestones 0 to 7 are done (§15); the 72 maps have passed automated checks but no human playtest yet.
 > **Name:** Counterfire (§12.3).
 > **Source of truth for behaviour:** the original Windows 95 release. Where this spec and the original disagree on rules or mechanics, the original wins and this spec gets corrected. Levels and models deliberately differ from the original (§10, §12). Items marked **[VERIFY]** are not confirmed by a primary source yet. Someone must check them against the original game (by playing it or using the manual) before they count as final.
 
@@ -118,6 +118,14 @@ The original Windows release asks at start-up for **Training** or **Tournament**
 - **Tournament:** the campaign, a sequence of levels that get harder (§10.2).
 - **One player:** you against the CPU. The CPU has no vehicles of its own and defends with static turrets and drones. You must find and capture its flag.
 - **Two player:** split-screen on one machine. Each player has a bunker, a flag hidden in one of their own flag buildings, and their own vehicle stock. Each player tries to capture the other's flag. Turrets belong to either side.
+
+### 5.2a Campaign flow (milestone 7)
+- The title menu offers TRAINING, TOURNAMENT and TWO PLAYERS over a circling view of the selected map.
+- Each track lists its maps with a preview chart and the map's facts.
+- Training and two-player maps are always open. Tournament maps open one at a time as the previous one is won.
+- Progress is saved in `localStorage` and survives without it for the session.
+- After a win, Ground Fire goes to the next map; after a loss it tries the same map again. Esc returns to the menu, F3 pauses, and Alt+Enter toggles full screen.
+- **Not yet:** player name entry (§5.1). The players are called P1 and P2.
 
 ### 5.3 Win and loss conditions
 - **Win:** a jeep carrying the enemy flag drives back onto its own bunker.
@@ -372,8 +380,29 @@ The schema and loader must also accept user-made or add-on map packs without cod
 ### 10.4a Two-player maps
 Two-player maps are point-symmetric so both sides are equal. The designer draws the southern half in `assets/levels/src/<id>.half.json`, with P1's and neutral entities only. `bun tools/mirror-level.ts <half> <out>` turns it half a turn about the map centre and gives P2 the mirrored copy of everything P1 has. The tool validates the result and writes it to `assets/levels/`. The first one is `duel-01` "Twin Bridges". `src/levels/index.ts` lists every shipped level; `?level=<id>` loads one, and `?players=2` loads `duel-01`.
 
+### 10.4b How the shipped maps are made (milestone 7)
+- `src/levels/generate.ts` is the rough-in of §10.3a step 2. From a seed and a tier it builds a whole map following §10.3:
+  - islands, `chessboard` or `atoll` layouts
+  - rivers and lakes
+  - a road from the bunker to each walled compound, bridging water on the way
+  - forests, depots along the road, flag towers (most inside the compounds), turrets at gates, bridges and approaches (never within 10 tiles of the bunker), drone spawns, and a neutral village
+
+  Tier rules (`tierCounts`, `tierStock`) raise towers, turrets, drones and lakes and lower depots and stock as the tier rises. From tier 7 some maps have no bridges, so the compound is left to the helicopter and an amphibious jeep. Duels build the southern half and mirror it, with bridges in mirrored pairs so each span joins up.
+- `bun tools/build-levels.ts` regenerates the whole set from fixed seeds: training-02 to 06 (one lesson each), t1-1 to t9-6, and duel-02 to 12, plus `src/levels/catalog.ts`. training-01 and duel-01 are hand-made.
+  - Themes per tier slot: temperate, temperate, desert, winter, temperate, novelty.
+  - To hand-tune a map, edit it in the editor and take its id off the generated list.
+- Tests check every map: valid, deterministic, harder by tier, a fuel depot near each bunker, land access to the compound on early tiers, unique names, every theme used.
+
 ### 10.5 Level editor (development tool)
-A browser editor at `/editor` in dev builds. It paints the terrain grid, places entities, sets stock and flag candidates, runs the validator, and launches the map straight into a playtest. It exports JSON in the §10.3b schema. A later version could ship it to players.
+A browser editor at `/editor` in dev builds (`bun run dev`). It does the following:
+- loads any shipped level, or roughs in a new one from a tier, seed and layout
+- paints terrain and places structures for any team (right click removes)
+- edits the id, name, mode, players, theme, tier, size, bounds inset and stock
+- runs the validator
+- **Play** opens the map in the game as `?level=custom`
+- **Export JSON** downloads it for `assets/levels/`
+
+Flag candidates are every flag tower of each side. A later version could ship the editor to players.
 
 ---
 
@@ -477,7 +506,7 @@ For each item in §6 to §11, record a side-by-side clip of the original and the
 | 4 | **Rules** ✅ | flags, capture, win/loss, stock, 1P vs CPU with drones |
 | 5 | **2-player** ✅ | split-screen, mines, flag-defence behaviours |
 | 6 | **UI/Audio** ✅ | bunker, map, radar, HUD, beacon, SFX, skull, victory |
-| 7 | **Content** | level editor + validator, all 72 maps built and playtested (§10.2) |
+| 7 | **Content** ✅ | level editor + validator, all 72 maps built (§10.2). Automated checks done; human playtesting still to do. |
 | 8 | **Art pass** | all recreated models and textures, silhouette check (§12.2) |
 | 9 | **Polish/Release** | performance targets, rebinding, gamepads, "Counterfire" trademark and domain cleared |
 

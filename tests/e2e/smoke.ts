@@ -9,14 +9,18 @@ const root = join(import.meta.dir, '../..');
 const out = process.env.SMOKE_OUT ?? join(root, 'smoke-out');
 await mkdir(out, { recursive: true });
 
-const build = await Bun.build({ entrypoints: [join(root, 'index.html')], outdir: join(root, 'dist') });
+const build = await Bun.build({
+  entrypoints: [join(root, 'index.html'), join(root, 'editor.html')],
+  outdir: join(root, 'dist'),
+});
 if (!build.success) throw new AggregateError(build.logs, 'build failed');
 
 const server = Bun.serve({
   port: 0,
   async fetch(req) {
     const path = new URL(req.url).pathname;
-    const file = Bun.file(join(root, 'dist', path === '/' ? 'index.html' : path));
+    const page = path === '/' ? 'index.html' : path === '/editor' ? 'editor.html' : path;
+    const file = Bun.file(join(root, 'dist', page));
     return (await file.exists()) ? new Response(file) : new Response('not found', { status: 404 });
   },
 });
@@ -30,7 +34,7 @@ type Step = { press?: string[]; down?: string[]; up?: string[]; wait?: number; r
 const scenarios: { name: string; query: string; steps: Step[] }[] = [
   {
     name: 'tank',
-    query: '',
+    query: '?level=training-01',
     steps: [
       { wait: 1200 },
       { press: ['KeyH'], wait: 1300 },
@@ -40,7 +44,7 @@ const scenarios: { name: string; query: string; steps: Step[] }[] = [
   },
   {
     name: 'heli',
-    query: '',
+    query: '?level=training-01',
     steps: [
       { wait: 1200 },
       { press: ['KeyD', 'KeyD', 'KeyH'], wait: 2000 },
@@ -50,7 +54,7 @@ const scenarios: { name: string; query: string; steps: Step[] }[] = [
   },
   {
     name: 'jeep',
-    query: '',
+    query: '?level=training-01',
     steps: [
       { wait: 1200 },
       { press: ['KeyA', 'KeyH'], wait: 1300 },
@@ -73,6 +77,13 @@ const scenarios: { name: string; query: string; steps: Step[] }[] = [
     name: 'bunker-screen',
     query: '?players=2',
     steps: [{ wait: 1200 }, { press: ['KeyD', 'Numpad4'], wait: 300 }],
+  },
+  { name: 'menu', query: '', steps: [{ wait: 1500 }] },
+  { name: 'menu-tournament', query: '', steps: [{ wait: 1200 }, { press: ['KeyS', 'KeyH'], wait: 1000 }] },
+  {
+    name: 'menu-to-game',
+    query: '',
+    steps: [{ wait: 1200 }, { press: ['KeyH', 'KeyH'], wait: 1500 }, { press: ['KeyH'], wait: 1500 }],
   },
   { name: 'showcase', query: '?showcase', steps: [{ wait: 1500 }] },
   { name: 'map', query: '?players=2', steps: [{ wait: 1200 }, { press: ['KeyJ'], wait: 600 }] },
@@ -97,7 +108,7 @@ const scenarios: { name: string; query: string; steps: Step[] }[] = [
   },
   {
     name: 'skull',
-    query: '?test',
+    query: '?level=training-01&test',
     steps: [
       { wait: 1200 },
       { run: `const w = counterfire.world; w.destroyVehicle(w.spawnVehicle('P1', 'tank'));`, wait: 700 },
@@ -105,7 +116,7 @@ const scenarios: { name: string; query: string; steps: Step[] }[] = [
   },
   {
     name: 'victory',
-    query: '?test',
+    query: '?level=training-01&test',
     steps: [{ wait: 1200 }, { run: `counterfire.world.endGame('P1', 'flagCaptured');`, wait: 1500 }],
   },
 ];
@@ -130,6 +141,36 @@ try {
     }
     await page.screenshot({ path: join(out, `${name}.png`) });
     console.log(`${name}: ${errors.length ? `FAIL\n  ${errors.join('\n  ')}` : 'ok'}`);
+    failed ||= errors.length > 0;
+    await page.close();
+  }
+
+  // the level editor: rough in a map, check it validates, then play it as the custom level
+  {
+    const page = await browser.newPage({ viewport: { width: 1400, height: 800 } });
+    const errors: string[] = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
+    await page.goto(`${server.url}editor`);
+    await page.waitForTimeout(500);
+    await page.fill('#genTier', '6');
+    await page.fill('#genSeed', '42');
+    await page.click('#generate');
+    await page.click('#validate');
+    const verdict = await page.textContent('#errors');
+    if (verdict?.trim() !== 'valid') errors.push(`generated map did not validate: ${verdict}`);
+    await page.screenshot({ path: join(out, 'editor.png') });
+    const level = await page.evaluate(() => {
+      document.querySelector<HTMLButtonElement>('#play')?.click();
+      return localStorage.getItem('counterfire.customLevel');
+    });
+    if (!level) errors.push('Play did not leave the map for the game');
+    await page.goto(`${server.url}?level=custom`);
+    await page.waitForTimeout(1500);
+    await page.keyboard.press('KeyJ', { delay: 40 });
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: join(out, 'editor-play.png') });
+    console.log(`editor: ${errors.length ? `FAIL\n  ${errors.join('\n  ')}` : 'ok'}`);
     failed ||= errors.length > 0;
     await page.close();
   }

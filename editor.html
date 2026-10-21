@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Counterfire Level Editor</title>
+    <style>
+      :root { --bg: #11161a; --panel: #1b2226; --edge: #3a4447; --text: #e7e2c4; --dim: #9a9677; --accent: #e8d23a; }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--bg); color: var(--text); font: 13px/1.4 ui-monospace, monospace; display: grid; grid-template-columns: 230px 1fr 260px; grid-template-rows: auto 1fr; height: 100vh; }
+      header { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 12px; background: var(--panel); border-bottom: 1px solid var(--edge); }
+      header h1 { font-size: 15px; margin: 0 12px 0 0; color: var(--accent); }
+      aside { background: var(--panel); padding: 10px; overflow: auto; border-right: 1px solid var(--edge); }
+      aside.right { border-right: 0; border-left: 1px solid var(--edge); }
+      main { overflow: auto; display: grid; place-items: center; }
+      canvas { image-rendering: pixelated; cursor: crosshair; }
+      h2 { font-size: 12px; color: var(--dim); text-transform: uppercase; margin: 12px 0 6px; }
+      button, select, input { font: inherit; background: #0d1114; color: var(--text); border: 1px solid var(--edge); border-radius: 3px; padding: 3px 6px; }
+      button { cursor: pointer; }
+      button.on { border-color: var(--accent); color: var(--accent); }
+      .tools { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+      .swatch { display: inline-block; width: 10px; height: 10px; margin-right: 4px; vertical-align: -1px; border: 1px solid #000; }
+      label { display: grid; grid-template-columns: 70px 1fr; align-items: center; gap: 6px; margin: 4px 0; }
+      input[type=number] { width: 70px; }
+      #errors li { color: #f88; }
+      #errors.ok li { color: #7cc44a; }
+      #status { color: var(--dim); margin-left: auto; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>COUNTERFIRE EDITOR</h1>
+      <select id="levels"></select><button id="load">Load</button>
+      <button id="new">New</button>
+      <span>|</span>
+      tier <input id="genTier" type="number" min="1" max="9" value="3" />
+      seed <input id="genSeed" type="number" value="1" />
+      <select id="genLayout"><option value="islands">islands</option><option value="chessboard">chessboard</option><option value="atoll">atoll</option></select>
+      <button id="generate">Rough-in</button>
+      <span>|</span>
+      <button id="validate">Validate</button>
+      <button id="play">Play</button>
+      <button id="export">Export JSON</button>
+      <label style="display:inline-flex;gap:4px;margin:0"><input id="import" type="file" accept=".json" style="width:180px" /></label>
+      <span id="status"></span>
+    </header>
+    <aside>
+      <h2>Terrain</h2>
+      <div class="tools" id="tiles"></div>
+      <h2>Structures</h2>
+      <div class="tools" id="entities"></div>
+      <h2>Team</h2>
+      <div class="tools" id="teams"></div>
+      <p style="color:var(--dim)">Left drag paints or places. Right click removes a structure.</p>
+    </aside>
+    <main><canvas id="map"></canvas></main>
+    <aside class="right">
+      <h2>Level</h2>
+      <label>id <input id="id" /></label>
+      <label>name <input id="name" /></label>
+      <label>mode <select id="mode"><option>training</option><option>tournament</option></select></label>
+      <label>players <select id="players"><option value="1">1</option><option value="2">2</option></select></label>
+      <label>theme <select id="theme"><option>temperate</option><option>desert</option><option>winter</option><option>novelty</option></select></label>
+      <label>tier <input id="tier" type="number" min="1" max="9" /></label>
+      <label>size <span><input id="w" type="number" min="16" max="120" /> x <input id="h" type="number" min="16" max="120" /></span></label>
+      <label>inset <input id="inset" type="number" min="0" max="10" value="0" title="bounds inset from the map edge" /></label>
+      <h2>Stock P1</h2>
+      <div id="stockP1"></div>
+      <h2>Stock P2</h2>
+      <div id="stockP2"></div>
+      <h2>Validation</h2>
+      <ul id="errors"></ul>
+    </aside>
+    <script type="module" src="./src/editor/main.ts"></script>
+  </body>
+</html>

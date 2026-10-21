@@ -94,6 +94,8 @@ export function drawHud(
   world: World,
   bindings: Record<PlayerId, Bindings>,
   mapOpen: ReadonlySet<PlayerId>,
+  /** What Ground Fire does once the game is over: next map, try again, play again. */
+  endHint = 'PLAY AGAIN',
 ): void {
   const ctx = mainContext;
   const players = [...world.players.values()];
@@ -104,7 +106,7 @@ export function drawHud(
     ctx.save();
     ctx.font = HUD.font;
     ctx.textBaseline = 'middle';
-    if (world.outcome) drawGameOver(ctx, world, p, area, keys);
+    if (world.outcome) drawGameOver(ctx, world, p, area, keys, endHint);
     else if (p.mode === 'bunker' && mapOpen.has(p.id))
       drawMapScreen(ctx, world, p.id, area, `${keyLabel(keys.fireAir[0])} back to the bunker`);
     else if (p.mode === 'bunker') drawBunker(ctx, p, area, keys);
@@ -128,7 +130,14 @@ const REASONS: Record<GameOverReason, string> = {
 };
 
 /** The end of the game: ticker tape for the winner, then who won, why, and how to play again. */
-function drawGameOver(ctx: Ctx, world: World, p: PlayerState, area: Area, keys: Bindings): void {
+function drawGameOver(
+  ctx: Ctx,
+  world: World,
+  p: PlayerState,
+  area: Area,
+  keys: Bindings,
+  hint: string,
+): void {
   const o = world.outcome;
   if (!o) return;
   const t = (world.tick - o.tick) / TICK_RATE;
@@ -152,7 +161,7 @@ function drawGameOver(ctx: Ctx, world: World, p: PlayerState, area: Area, keys: 
   ctx.fillText(REASONS[o.reason], cx, cy + 46);
   if (world.tick - o.tick > GAME_OVER_TICKS) {
     ctx.font = '16px monospace';
-    ctx.fillText(`${keyLabel(keys.fireGround[0])} TO PLAY AGAIN`, cx, cy + 84);
+    ctx.fillText(`${keyLabel(keys.fireGround[0])} ${hint}   ESC MENU`, cx, cy + 84);
   }
   ctx.restore();
 }

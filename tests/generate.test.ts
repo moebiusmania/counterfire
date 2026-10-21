@@ -81,6 +81,16 @@ describe('shipped set (SPEC §10.2)', () => {
     expect(new Set(all.map((l) => l.theme))).toEqual(new Set(['temperate', 'desert', 'winter', 'novelty']));
   });
 
+  test('every map has a fuel depot within reach of the P1 bunker', () => {
+    for (const level of [...track('training'), ...track('tournament'), ...track('duel')]) {
+      const bunker = level.entities.find((e) => e.type === 'bunker');
+      const fuel = level.entities.filter((e) => e.type === 'fuelDepot' && e.team === bunker?.team);
+      if (!bunker) throw new Error(level.id);
+      expect(fuel.length).toBeGreaterThan(0);
+      expect(Math.min(...fuel.map((f) => Math.hypot(f.x - bunker.x, f.y - bunker.y)))).toBeLessThan(9);
+    }
+  });
+
   test('a land vehicle can reach the compound on maps that have bridges', () => {
     for (const level of track('tournament').filter((l) => l.tier && l.tier <= 3 && l.theme !== 'novelty')) {
       const bunker = level.entities.find((e) => e.type === 'bunker');

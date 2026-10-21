@@ -81,7 +81,10 @@ const NEIGHBOURS = [
 
 /** A cell is free for a structure when it is open ground and nothing stands on it or next to it. */
 class Placer {
+  /** Cells with a structure on them; others keep a gap from these. */
   private readonly taken = new Set<number>();
+  /** Cells kept clear (roads, the bunker apron), with no gap needed next to them. */
+  private readonly clear = new Set<number>();
   readonly entities: LevelEntity[] = [];
   constructor(
     private readonly g: Grid,
@@ -95,14 +98,15 @@ class Placer {
   free(c: number, r: number, gap = 1): boolean {
     const t = this.g.get(c, r);
     if (t !== Tile.Grass && t !== Tile.Sand) return false;
+    if (this.clear.has(this.key(c, r))) return false;
     for (let dr = -gap; dr <= gap; dr++)
       for (let dc = -gap; dc <= gap; dc++) if (this.taken.has(this.key(c + dc, r + dr))) return false;
     return true;
   }
 
-  /** Mark a cell taken without placing anything, to keep it clear (roads, the bunker apron). */
+  /** Keep a cell clear of structures (roads, the bunker apron); building right beside it is fine. */
   reserve(c: number, r: number): void {
-    this.taken.add(this.key(c, r));
+    this.clear.add(this.key(c, r));
   }
 
   place(c: number, r: number, e: Omit<LevelEntity, 'x' | 'y'>): LevelEntity {
@@ -436,7 +440,7 @@ function buildOnePlayer(spec: GenSpec, seed: number): Level {
     for (let dc = -1; dc <= 1; dc++) place.reserve(bunker[0] + dc, bunker[1] + dr);
   place.place(bunker[0], bunker[1], { id: 'p1-bunker', type: 'bunker', team: 'P1', rot: 0 });
 
-  placeDepots(place, routes[0] ?? [], bunker, counts.depots, 'P1');
+  placeDepots(g, place, routes[0] ?? [], bunker, counts.depots, 'P1');
   placeTargets(g, place, bunker, spec.targets ?? 0);
 
   // flag towers: most inside the compounds, the rest out in the north
@@ -508,6 +512,7 @@ function definedOnly(spec: GenSpec) {
 
 /** Depots by the road, the first ones close to home (rule 5). */
 function placeDepots(
+  g: Grid,
   place: Placer,
   route: [number, number][],
   home: [number, number],
@@ -522,8 +527,14 @@ function placeDepots(
     // the first pair near the bunker, later ones further up the road
     const lo = i < 2 ? 2 : 6 + i * 3;
     const hi = i < 2 ? 7 : 12 + i * 4;
-    const spots = beside.filter((p) => near(p, home) >= lo && near(p, home) <= hi);
-    place.placeAny(spots, { id: `${team.toLowerCase()}-${type}-${i + 1}`, type, team });
+    const e = { id: `${team.toLowerCase()}-${type}-${i + 1}`, type, team };
+    const inRange = (p: [number, number]) => near(p, home) >= lo && near(p, home) <= hi;
+    // beside the road if there is room, otherwise on open ground the same distance from home
+    if (!place.placeAny(beside.filter(inRange), e))
+      place.placeAny(
+        cellsWhere(g, (c, r) => inRange([c, r])),
+        e,
+      );
   }
 }
 
@@ -613,7 +624,7 @@ function buildDuel(spec: GenSpec, seed: number): Level {
   const at = (p: [number, number]): [number, number] => [p[0], p[1] + hh];
   for (const [c, r] of routes.flat()) place.reserve(c, r + hh);
   place.place(...at(bunker), { id: 'p1-bunker', type: 'bunker', team: 'P1', rot: 0 });
-  placeDepots(place, (routes[2] ?? []).map(at), at(bunker), counts.depots, 'P1');
+  placeDepots(full, place, (routes[2] ?? []).map(at), at(bunker), counts.depots, 'P1');
 
   const towers: string[] = [];
   const total = Math.max(3, Math.min(6, counts.towers));

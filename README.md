@@ -16,6 +16,9 @@ bun run dev        # http://localhost:3000, add ?players=2 for split-screen
 | `bun check` | typecheck |
 | `bun run lint` | Biome |
 | `bun run build` | production build into `dist/` |
+| `bun tools/build-levels.ts` | regenerate the 72-map set and its catalog |
+
+The level editor runs at http://localhost:3000/editor while `bun run dev` is up.
 
 ## Controls
 

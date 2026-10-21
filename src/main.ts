@@ -1,23 +1,31 @@
-// Counterfire entry point: engine setup, the fixed-step loop and the per-frame render hooks.
+// Counterfire entry point: engine setup, the menu, the fixed-step game loop and the render hooks.
 //
-// Milestone 5 build: training-01 alone against the CPU, or `?players=2` for a split-screen duel
-// on duel-01. `?level=<id>` picks any shipped level; gamepads 0 and 1 play alongside the keys.
-// `?showcase` freezes a line-up of every vehicle, structure and soldier under a close camera,
-// to check the models.
+// The game opens on the title menu (SPEC §5.1). URL options skip it for development and tests:
+// `?level=<id>` plays a level, `?players=2` the first duel, `?showcase` the model line-up, `?seed=N`
+// fixes the seed, and `?test` hands the live world to the browser smoke test.
+// In play: Esc goes back to the menu, F3 pauses, Alt+Enter toggles full screen (SPEC §9.7).
 
 import {
   engineInit,
   engineObjectsDestroy,
+  keyIsDown,
   keyWasPressed,
+  mainCanvasSize,
+  mainContext,
+  paused,
   Render3DPlugin,
   render3D,
   rgb,
   setCanvasClearColor,
   setInputWASDEmulateDirection,
+  setPaused,
   setShowSplashScreen,
   vec3,
 } from 'littlejsengine';
 import { playSfx, setListeners } from './audio/sfx';
+import { CUSTOM_KEY } from './editor/custom';
+import { loadProgress, nextLevel, type Progress, recordWin, saveProgress, trackOf } from './game/progress';
+import { addShowcaseStructures, parkShowcase } from './game/showcase';
 import { type Bindings, loadBindings, readInput } from './input/bindings';
 import { mergeInputs, readGamepad } from './input/gamepad';
 import { defaultLevelId, getLevel } from './levels';
@@ -27,46 +35,37 @@ import { toWorld } from './render/terrain';
 import { THEMES } from './render/themes';
 import { PlayerView, SplitScreen } from './render/views';
 import { type BeaconLight, jeepBeacon } from './sim/beacon';
-import { Drone } from './sim/drones';
 import { GAME_OVER_TICKS } from './sim/tuning';
 import type { InputFrame, PlayerId } from './sim/types';
-import { VEHICLE_ORDER, World } from './sim/world';
+import { World } from './sim/world';
 import { clearBanners, drawHud, updateBanners } from './ui/hud';
+import { drawMenu, initialMenu, type MenuAction, type MenuState, menuInput, selectedLevel } from './ui/menu';
 
 const params = new URLSearchParams(location.search);
 const showcase = params.has('showcase');
-const levelId = showcase
+const directLevel = showcase
   ? 'training-01'
-  : (params.get('level') ?? defaultLevelId(params.get('players') === '2' ? 2 : 1));
-const seed = Number(params.get('seed') ?? Date.now() % 1e9);
+  : (params.get('level') ?? (params.get('players') === '2' ? defaultLevelId(2) : undefined));
+const fixedSeed = params.has('seed') ? Number(params.get('seed')) : undefined;
 
 let world: World;
 let scene: SceneView;
 let split: SplitScreen;
 let bindings: Record<PlayerId, Bindings>;
 let players: PlayerId[];
+let progress: Progress;
+let menu: MenuState = initialMenu();
+/** On the menu the world is a still backdrop under a slowly circling camera. */
+let inMenu = !directLevel;
+let menuAngle = 0;
 /** Last beacon colour per player, to chime when it turns green (SPEC §6.4). */
 const beacons = new Map<PlayerId, BeaconLight>();
 /** Players looking at the map in their bunker (SPEC §9.3), and last tick's Air Fire for each. */
 const mapOpen = new Set<PlayerId>();
 const lastAir = new Map<PlayerId, boolean>();
 
-function loadLevel(): Level {
-  const level = getLevel(levelId) ?? getLevel(defaultLevelId(1));
-  if (!level) throw new Error(`no level '${levelId}'`);
-  if (showcase) {
-    const b = level.entities.find((e) => e.id === 'p1-bunker');
-    const y = (b?.y ?? 0) + 4;
-    const x = (b?.x ?? 0) - 2.4;
-    level.entities.push(
-      { id: 'sc-house', type: 'building', team: 'NEUTRAL', variant: 'house', x, y },
-      { id: 'sc-barracks', type: 'building', team: 'CPU', variant: 'barracks', x: x + 1.6, y },
-      { id: 'sc-gun', type: 'turret', team: 'P1', variant: 'gun', x: x + 3.2, y, rot: 0.6 },
-      { id: 'sc-missile', type: 'turret', team: 'P1', variant: 'missile', x: x + 4.8, y, rot: -0.6 },
-      { id: 'sc-rubble', type: 'building', team: 'NEUTRAL', x: x + 6.4, y },
-    );
-  }
-  return level;
+function newSeed(): number {
+  return fixedSeed ?? Math.floor(Math.random() * 1e9);
 }
 
 function vehiclePos(player: PlayerId) {
@@ -88,66 +87,94 @@ function gameInit() {
   render3D.setFog(40, 90);
   render3D.onRenderOpaque = () => scene.drawDynamic(players[split.current] ?? 'P1');
   bindings = loadBindings();
-  startGame(seed);
+  progress = loadProgress();
+  startLevel(directLevel ?? selectedLevel(menu) ?? defaultLevelId(1), newSeed());
 }
 
-/** A fresh world and everything drawn for it; also how a finished game restarts. */
-function startGame(gameSeed: number) {
+/** A fresh world for a level and everything drawn for it. */
+function startLevel(id: string, seed: number) {
   engineObjectsDestroy();
   clearBanners();
   mapOpen.clear();
   beacons.clear();
-  world = new World(loadLevel(), gameSeed);
+  const level = (id === 'custom' ? customLevel() : getLevel(id)) ?? getLevel(defaultLevelId(1));
+  if (!level) throw new Error(`no level '${id}'`);
+  if (showcase) addShowcaseStructures(level);
+  world = new World(level, seed);
   players = [...world.players.keys()];
-  if (showcase) parkShowcase();
+  if (showcase) parkShowcase(world);
   const theme = THEMES[world.level.theme];
   render3D.setSky(...theme.sky, 0.55);
   render3D.sunColor = theme.sun;
   scene = new SceneView(world);
-  split.views = players.map((p) => new PlayerView(vehiclePos(p)));
-  // `?test` hands the browser smoke test the live world, to stage scenes that take long to play
+  // the menu shows one view; the game splits the screen for two players
+  split.views = (inMenu ? ['P1' as PlayerId] : players).map((p) => new PlayerView(vehiclePos(p)));
   if (params.has('test')) Object.assign(globalThis, { counterfire: { world } });
 }
 
-/** One of each vehicle in a row beside the P1 bunker, the helicopter flying, the jeep's tyres up. */
-function parkShowcase() {
-  const bunker = world.player('P1').bunker;
-  VEHICLE_ORDER.forEach((type, i) => {
-    const v = world.spawnVehicle('P1', type);
-    v.x = bunker.x - 2.4 + i * 1.6;
-    v.y = bunker.y + 2;
-    v.heading = 0.5;
-    v.turret = type === 'tank' ? -0.9 : 0;
-    if (type === 'jeep') v.tyresInflated = true;
-    if (type === 'heli') v.altitude = 0.3;
-  });
-  const p = world.player('P1');
-  p.vehicle = undefined;
-  p.mode = 'field';
-  p.lostTimer = Number.POSITIVE_INFINITY;
-  const rubble = world.structures.find((s) => s.entity.id === 'sc-rubble');
-  if (rubble) world.damageStructure(rubble, rubble.hp);
-  world.soldiers.splice(0); // the rubble's occupants; the line-up below replaces them
-  Object.assign(world.submarine, {
-    state: 'aiming',
-    surfaced: 1,
-    x: bunker.x + 3.4,
-    y: bunker.y + 0.6,
-    heading: 1.2,
-  });
-  for (let i = 0; i < 4; i++) {
-    const s = world.spawnSoldier(i % 2 ? 'CPU' : 'NEUTRAL', bunker.x - 1.5 + i * 0.5, bunker.y + 0.9);
-    s.state = i === 3 ? 'dead' : i % 2 ? 'waving' : 'running';
+/** The map the level editor's Play button left behind (SPEC §10.5). */
+function customLevel(): Level | undefined {
+  try {
+    const saved = localStorage.getItem(CUSTOM_KEY);
+    return saved ? (JSON.parse(saved) as Level) : undefined;
+  } catch {
+    return undefined;
   }
-  const flag = world.flags[0];
-  if (flag) Object.assign(flag, { state: 'exposed', x: bunker.x + 1.2, y: bunker.y + 0.9 });
-  const drone = new Drone(0, 'CPU', 'showcase', bunker.x - 2.6, bunker.y + 0.6);
-  drone.heading = -0.4;
-  world.drones.push(drone);
 }
+
+function play(id: string) {
+  inMenu = false;
+  startLevel(id, newSeed());
+}
+
+function backToMenu() {
+  inMenu = true;
+  setPaused(false);
+  const id = selectedLevel(menu) ?? world.level.id;
+  startLevel(id, 1);
+}
+
+// --- the menu ---
+
+/** One press of a menu control, from P1's keys, the arrows, Enter/Escape or the first gamepad. */
+function menuAction(): MenuAction | undefined {
+  const k = bindings.P1;
+  const any = (codes: string[]) => codes.some((c) => keyWasPressed(c));
+  if (any([...k.forward, 'ArrowUp'])) return 'up';
+  if (any([...k.back, 'ArrowDown'])) return 'down';
+  if (any([...k.left, 'ArrowLeft'])) return 'left';
+  if (any([...k.right, 'ArrowRight'])) return 'right';
+  // Alt+Enter is full screen, not a menu choice
+  const alt = keyIsDown('AltLeft') || keyIsDown('AltRight');
+  if (any([...k.fireGround, 'Space']) || (!alt && keyWasPressed('Enter'))) return 'select';
+  if (any(['Escape', ...k.fireAir])) return 'back';
+  return undefined;
+}
+
+function updateMenu() {
+  const action = menuAction();
+  if (!action) return;
+  const before = selectedLevel(menu);
+  const { menu: next, start } = menuInput(menu, action, progress);
+  menu = next;
+  playSfx(start ? 'elevator' : 'select');
+  if (start) play(start);
+  else if (menu.screen === 'levels' && selectedLevel(menu) !== before)
+    startLevel(selectedLevel(menu) ?? before ?? '', 1);
+}
+
+// --- the game ---
 
 function gameUpdate() {
   if (showcase) return; // a still line-up
+  if (inMenu) {
+    updateMenu();
+    return;
+  }
+  if (keyWasPressed('Escape') && !directLevel) {
+    backToMenu();
+    return;
+  }
   const inputs: Partial<Record<PlayerId, InputFrame>> = {};
   players.forEach((p, i) => {
     inputs[p] = mergeInputs(readInput(bindings[p]), readGamepad(i));
@@ -163,15 +190,33 @@ function gameUpdate() {
     // two players share one screen, so a win for either sounds like a win
     const won = e.winner !== 'CPU' && e.winner !== 'draw';
     playSfx(won ? 'victory' : 'defeat');
+    if (e.winner === 'P1' && world.level.players === 1) {
+      progress = recordWin(progress, world.level.id);
+      saveProgress(progress);
+    }
   }
   chimeBeacons();
   celebrate();
 
   const o = world.outcome;
   if (o && world.tick - o.tick > GAME_OVER_TICKS) {
-    if (players.some((p) => bindings[p].fireGround.some((k) => keyWasPressed(k))))
-      startGame(seed + world.tick);
+    if (players.some((p) => bindings[p].fireGround.some((k) => keyWasPressed(k)))) afterGame();
   }
+}
+
+/** What Ground Fire does at the end: the next map after a win, the same map again otherwise. */
+function afterGame() {
+  const id = world.level.id;
+  const won = world.outcome?.winner === 'P1' && world.level.players === 1;
+  const next = won ? nextLevel(trackOf(id), id) : undefined;
+  if (won && !next && !directLevel) backToMenu();
+  else startLevel(next ?? id, newSeed());
+}
+
+function endHint(): string {
+  const won = world.outcome?.winner === 'P1' && world.level.players === 1;
+  if (!won) return world.level.players === 1 ? 'TRY AGAIN' : 'PLAY AGAIN';
+  return nextLevel(trackOf(world.level.id), world.level.id) ? 'NEXT MAP' : 'BACK TO MENU';
 }
 
 /** Air Fire in the bunker opens and closes the map; leaving the bunker closes it. */
@@ -207,7 +252,17 @@ function chimeBeacons() {
   }
 }
 
+/** System keys work even while paused. */
+function systemKeys() {
+  if (keyWasPressed('F3') && !inMenu) setPaused(!paused);
+  if (keyWasPressed('Enter') && (keyIsDown('AltLeft') || keyIsDown('AltRight'))) {
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else void document.documentElement.requestFullscreen?.();
+  }
+}
+
 function gameUpdatePost() {
+  systemKeys();
   scene.sync();
   if (showcase) {
     const b = world.player('P1').bunker;
@@ -215,6 +270,22 @@ function gameUpdatePost() {
     if (view) {
       view.camera.pos = toWorld(b.x, b.y - 2.5, 4.2);
       view.camera.lookAt(toWorld(b.x, b.y + 2, 0.4));
+    }
+    return;
+  }
+  if (inMenu) {
+    // circle high over the middle of the selected map
+    const view = split.views[0];
+    const t = world.terrain;
+    menuAngle += 0.002;
+    if (view) {
+      const r = Math.max(t.w, t.h) * 0.55;
+      view.camera.pos = toWorld(
+        t.w / 2 + Math.sin(menuAngle) * r,
+        t.h / 2 - Math.cos(menuAngle) * r,
+        r * 0.8,
+      );
+      view.camera.lookAt(toWorld(t.w / 2, t.h / 2, 0));
     }
     return;
   }
@@ -230,7 +301,23 @@ function gameRender() {
 }
 
 function gameRenderPost() {
-  if (!showcase) drawHud(world, bindings, mapOpen);
+  if (showcase) return;
+  if (inMenu) {
+    drawMenu(mainContext, menu, progress, mainCanvasSize.x, mainCanvasSize.y);
+    return;
+  }
+  drawHud(world, bindings, mapOpen, endHint());
+  if (paused) {
+    const ctx = mainContext;
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,.5)';
+    ctx.fillRect(0, 0, mainCanvasSize.x, mainCanvasSize.y);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 40px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('PAUSED - F3', mainCanvasSize.x / 2, mainCanvasSize.y / 2);
+    ctx.restore();
+  }
 }
 
 engineInit(gameInit, gameUpdate, gameUpdatePost, gameRender, gameRenderPost);
