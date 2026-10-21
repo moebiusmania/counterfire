@@ -1,0 +1,25 @@
+{
+  "name": "counterfire",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "bun --hot scripts/dev.ts",
+    "build": "bun build ./index.html --outdir dist --minify",
+    "test": "bun test",
+    "typecheck": "bun check",
+    "lint": "biome check src tests scripts tools",
+    "e2e": "bun tests/e2e/smoke.ts"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.6.2",
+    "@types/bun": "latest",
+    "playwright": "^1.64.1",
+    "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "littlejsengine": "1.28.0"
+  },
+  "patchedDependencies": {
+    "littlejsengine@1.28.0": "patches/littlejsengine@1.28.0.patch"
+  }
+}

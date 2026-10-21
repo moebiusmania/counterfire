@@ -1,0 +1,99 @@
+// Placeholder models built from primitives. They keep each vehicle's type readable from the
+// top-down camera (SPEC §12.2) until the recreated glTF models land in milestone 8.
+
+import { buildBox, buildCone, buildCylinder, buildMatrix, type Color, Mesh, rgb, vec3 } from 'littlejsengine';
+import type { Team } from '../sim/types';
+
+export const TEAM_COLORS: Record<Team, Color> = {
+  P1: rgb(0.85, 0.75, 0.2),
+  P2: rgb(0.25, 0.5, 0.9),
+  CPU: rgb(0.8, 0.2, 0.15),
+  NEUTRAL: rgb(0.7, 0.7, 0.7),
+};
+
+const OLIVE = rgb(0.33, 0.37, 0.2);
+const DARK = rgb(0.12, 0.12, 0.1);
+const STEEL = rgb(0.25, 0.27, 0.22);
+
+export interface TankMeshes {
+  hull: Mesh;
+  turret: Mesh;
+}
+
+/** Tank: tracked hull plus a separate turret with one long gun, facing -Z. */
+export function buildTank(team: Team): TankMeshes {
+  const hull = new Mesh();
+  hull.combine(buildBox(vec3(0.62, 0.22, 0.95), 0.03), vec3(0, 0.2, 0), OLIVE);
+  // tracks
+  for (const side of [-1, 1])
+    hull.combine(buildBox(vec3(0.18, 0.2, 1.0), 0.04), vec3(side * 0.36, 0.1, 0), DARK);
+  // team stripe across the rear deck
+  hull.combine(buildBox(vec3(0.5, 0.02, 0.12)), vec3(0, 0.32, 0.36), TEAM_COLORS[team]);
+
+  const turret = new Mesh();
+  turret.combine(buildCylinder(0.46, 0.16, 12), vec3(0, 0.08, 0.04), OLIVE);
+  const barrel = buildCylinder(0.07, 0.6, 8);
+  turret.combine(barrel, buildMatrix(vec3(0, 0.09, -0.42), vec3(Math.PI / 2, 0, 0)), STEEL);
+  turret.combine(buildBox(vec3(0.1, 0.06, 0.1)), vec3(0.1, 0.19, 0.08), DARK); // commander's hatch
+  return { hull, turret };
+}
+
+/** A conifer for forest tiles. */
+export function buildTree(): Mesh {
+  const tree = new Mesh();
+  tree.combine(buildCylinder(0.14, 0.3, 6), vec3(0, 0.15, 0), rgb(0.35, 0.22, 0.1));
+  tree.combine(buildCone(0.8, 0.9, 7), vec3(0, 0.65, 0), rgb(0.1, 0.35, 0.12));
+  tree.combine(buildCone(0.55, 0.6, 7), vec3(0, 1.0, 0), rgb(0.13, 0.42, 0.15));
+  return tree;
+}
+
+/** Bunker: a low concrete pad with the elevator hatch in team colour. */
+export function buildBunker(team: Team): Mesh {
+  const m = new Mesh();
+  m.combine(buildBox(vec3(1.8, 0.08, 1.8), 0.04), vec3(0, 0.04, 0), rgb(0.5, 0.5, 0.48));
+  m.combine(buildBox(vec3(1.1, 0.02, 1.1)), vec3(0, 0.09, 0), TEAM_COLORS[team]);
+  m.combine(buildBox(vec3(0.9, 0.03, 0.9)), vec3(0, 0.1, 0), rgb(0.2, 0.2, 0.2));
+  return m;
+}
+
+export function buildFlagTower(team: Team): Mesh {
+  const m = new Mesh();
+  m.combine(buildBox(vec3(0.8, 1.4, 0.8), 0.03), vec3(0, 0.7, 0), rgb(0.62, 0.58, 0.5));
+  m.combine(buildBox(vec3(0.9, 0.12, 0.9)), vec3(0, 1.46, 0), TEAM_COLORS[team]);
+  return m;
+}
+
+export function buildTurret(team: Team): Mesh {
+  const m = new Mesh();
+  m.combine(buildCylinder(0.7, 0.35, 10), vec3(0, 0.18, 0), rgb(0.45, 0.45, 0.42));
+  m.combine(buildBox(vec3(0.4, 0.25, 0.45)), vec3(0, 0.48, 0), TEAM_COLORS[team]);
+  m.combine(buildCylinder(0.08, 0.5, 6), buildMatrix(vec3(0, 0.5, -0.4), vec3(Math.PI / 2, 0, 0)), STEEL);
+  return m;
+}
+
+export function buildDepot(kind: 'fuelDepot' | 'ammoTent', team: Team): Mesh {
+  const m = new Mesh();
+  if (kind === 'fuelDepot') {
+    m.combine(buildCylinder(0.45, 0.6, 10), vec3(-0.2, 0.3, 0), rgb(0.75, 0.72, 0.6));
+    m.combine(buildCylinder(0.45, 0.6, 10), vec3(0.25, 0.3, 0.1), rgb(0.75, 0.72, 0.6));
+  } else {
+    m.combine(
+      buildCone(1.0, 0.6, 4),
+      buildMatrix(vec3(0, 0.3, 0), vec3(0, Math.PI / 4, 0)),
+      rgb(0.4, 0.45, 0.25),
+    );
+  }
+  m.combine(buildBox(vec3(0.3, 0.05, 0.3)), vec3(0, 0.02, 0.45), TEAM_COLORS[team]);
+  return m;
+}
+
+export function buildWallBlock(): Mesh {
+  return new Mesh().combine(buildBox(vec3(1, 0.7, 1), 0.02), vec3(0, 0.35, 0), rgb(0.55, 0.52, 0.45));
+}
+
+export function buildBridgeDeck(): Mesh {
+  const m = new Mesh();
+  m.combine(buildBox(vec3(1, 0.1, 1)), vec3(0, 0.02, 0), rgb(0.45, 0.33, 0.2));
+  for (const side of [-1, 1]) m.combine(buildBox(vec3(1, 0.12, 0.06)), vec3(0, 0.12, side * 0.47), DARK);
+  return m;
+}

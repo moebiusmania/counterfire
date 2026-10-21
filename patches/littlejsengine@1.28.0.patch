@@ -1,0 +1,11 @@
+diff --git a/dist/littlejs.esm.js b/dist/littlejs.esm.js
+index 021ddc8604ab8ad7efc8c906433c7871a0cb0265..809eca47c82d7f92947f0db3009e256610dd5239 100644
+--- a/dist/littlejs.esm.js
++++ b/dist/littlejs.esm.js
+@@ -45947,3 +45947,6 @@ export
+     particleEffectsAddBehavior,
+ }
+ 
++
++// counterfire patch: expose the 3D pass so the game can draw a second split-screen viewport
++export { render3DRenderPass };
