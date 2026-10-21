@@ -2,7 +2,7 @@
 
 **Counterfire** is a browser game that remakes **Return Fire** (Silent Software, 3DO 1995 / Windows 95 1996) and matches the original's gameplay feature for feature. It is built with **Bun**, **TypeScript** and **LittleJS**. Its levels and 3D models are new, made in the style of the original.
 
-> **Status:** v0.3, 2026-10-21. Milestones 0 and 1 are done (§15).
+> **Status:** v0.4, 2026-10-21. Milestones 0 to 2 are done (§15).
 > **Name:** Counterfire (§12.3).
 > **Source of truth for behaviour:** the original Windows 95 release. Where this spec and the original disagree on rules or mechanics, the original wins and this spec gets corrected. Levels and models deliberately differ from the original (§10, §12). Items marked **[VERIFY]** are not confirmed by a primary source yet. Someone must check them against the original game (by playing it or using the manual) before they count as final.
 
@@ -175,6 +175,24 @@ All four vehicles share these rules:
 - **[VERIFY]** whether depots are team-owned, can be destroyed, and have finite supply.
 
 ---
+
+### 6.6 Working assumptions (milestone 2)
+The manual does not settle these rules. The code uses the choices below until someone checks them against the original. Each one is **[VERIFY]**, and every number lives in `src/sim/tuning.ts`.
+
+| Topic | Current behaviour |
+|---|---|
+| ASV weapon | Ground Fire launches rockets straight ahead, alternating left and right pods. Air Fire lays a mine behind it (2-player only, 6 mines). |
+| Mines | They destroy any land vehicle, including the layer's own team. Everyone can see them on the field. |
+| Helicopter controls | Ground Fire fires the selected weapon and Switch toggles gun and rockets. Air Fire does nothing. Flight height is fixed: it climbs after leaving the elevator and lands before going down. |
+| Helicopter hits | Gun and rocket shots fall from the air: they hit land vehicles on the way and act on the ground where they land. Rockets clear trees and destroy bridges and mines. The gun does neither. Nothing can hit the helicopter until turrets and drones arrive (M3). |
+| Helicopter fuel | Running out in the air destroys it. |
+| Jeep | Air Fire inflates or deflates the tyres, which takes 40 ticks. The tyres cannot be deflated in deep water. Inflated, it is slower on land, and slower still in water. Grenades are lobbed 3 tiles and clear trees. |
+| Land vehicles | All of them turn on the spot. They push each other apart and do not pass through each other. A land vehicle over deep water sinks, e.g. when its bridge is destroyed. |
+| Depots | Serve vehicles of their own team or neutral ones, without limit. Fuel refills continuously and ammo refills one round every 6 ticks. |
+| Bunker | The light comes on only after the vehicle has once driven off the pad. Going down returns the vehicle to stock, fully repaired and resupplied. |
+| Losing a vehicle | A destroyed or abandoned vehicle returns the player to the bunker after 2 seconds; the skull comes in M6. Wrecks burn for 3 seconds, then disappear. |
+| Bunker screen | Left/Right choose a slot and Ground Fire deploys. The map screen (Air Fire) comes in M6. |
+| Input | A key tapped between two updates still counts as one press. |
 
 ## 7. Flags
 
@@ -409,7 +427,7 @@ For each item in §6 to §11, record a side-by-side clip of the original and the
 |---|---|---|
 | 0 | **Spike** ✅ | 3D path chosen (§3.2), split-screen proof. A glTF proof waits for the first recreated model (M8). |
 | 1 | **Sim core** ✅ | tank drives on a test map, fixed-step sim, deterministic replay test |
-| 2 | **All vehicles** | 4 vehicles with weapons, fuel, ammo, damage, bunker loop |
+| 2 | **All vehicles** ✅ | 4 vehicles with weapons, fuel, ammo, damage, bunker loop |
 | 3 | **World** | structures, destruction, turrets, depots, bridges, soldiers, submarine |
 | 4 | **Rules** | flags, capture, win/loss, stock, 1P vs CPU with drones |
 | 5 | **2-player** | split-screen, mines, flag-defence behaviours |

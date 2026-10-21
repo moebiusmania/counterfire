@@ -1,6 +1,6 @@
 // Keyboard bindings from the original manual (SPEC §13.1). Keys are KeyboardEvent.code values.
 
-import { keyIsDown } from 'littlejsengine';
+import { keyIsDown, keyWasPressed } from 'littlejsengine';
 import type { InputFrame, PlayerId } from '../sim/types';
 
 export type Action = keyof InputFrame;
@@ -53,9 +53,12 @@ export function saveBindings(bindings: Record<PlayerId, Bindings>): void {
   }
 }
 
-/** Sample one player's keys into an input frame. */
+/**
+ * Sample one player's keys into an input frame. A key pressed since the last update counts as
+ * down even if it was already let go, so a quick tap between two updates is not lost.
+ */
 export function readInput(bindings: Bindings): InputFrame {
-  const down = (action: Action) => bindings[action].some((code) => keyIsDown(code));
+  const down = (action: Action) => bindings[action].some((code) => keyIsDown(code) || keyWasPressed(code));
   return {
     forward: down('forward'),
     back: down('back'),

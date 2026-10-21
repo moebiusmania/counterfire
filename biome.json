@@ -12,14 +12,12 @@
   },
   "linter": {
     "rules": {
-      "recommended": true
+      "preset": "recommended"
     }
   },
   "overrides": [
     {
-      "includes": [
-        "src/audio/**"
-      ],
+      "includes": ["src/audio/**"],
       "linter": {
         "rules": {
           "suspicious": {

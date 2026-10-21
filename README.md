@@ -21,7 +21,11 @@ bun run dev        # http://localhost:3000, add ?players=2 for split-screen
 
 | | Player 1 | Player 2 |
 |---|---|---|
-| Drive | W A S D | Numpad 8 4 5 6 |
-| Turret left / right | Q / E | Numpad 7 / 9 |
-| Fire | H | Numpad − |
-| Centre turret | K | Numpad Enter |
+| Drive / bunker: choose slot | W A S D | Numpad 8 4 5 6 |
+| Turret (tank) / strafe (helicopter) | Q / E | Numpad 7 / 9 |
+| Ground Fire: shoot / deploy / go down on the bunker | H | Numpad − |
+| Air Fire: mine (ASV) / tyres (jeep) / go down on the bunker | J | Numpad + |
+| Switch: centre turret / change weapon | K | Numpad Enter |
+| Self-destruct | H + J + K | − + Enter |
+
+Dev URLs: `?players=2` for split-screen, `?showcase` to view all vehicle models, `?seed=N` for a fixed seed.

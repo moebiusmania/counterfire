@@ -36,3 +36,21 @@ export function openField(size = 21): Level {
   rows[mid] = `${row.slice(0, mid)}B${row.slice(mid + 1)}`;
   return testLevel(rows);
 }
+
+/** A two-player level: 'B' marks the P1 bunker, 'C' the P2 bunker. */
+export function twoPlayerLevel(rows: string[]): Level {
+  const h = rows.length;
+  let p2 = { x: 0.5, y: 0.5 };
+  const cleaned = rows.map((row, r) => {
+    const c = row.indexOf('C');
+    if (c >= 0) p2 = { x: c + 0.5, y: h - 1 - r + 0.5 };
+    return row.replace('C', '.');
+  });
+  const level = testLevel(cleaned);
+  level.players = 2;
+  level.entities.push({ id: 'b2', type: 'bunker', team: 'P2', ...p2, rot: 0 });
+  level.entities.push({ id: 't2', type: 'flagTower', team: 'P1', x: 0.5, y: 0.5 });
+  level.stock.P2 = { tank: 1, asv: 1, heli: 1, jeep: 1 };
+  level.flagCandidates = { P1: ['t2'], P2: ['t'] };
+  return level;
+}

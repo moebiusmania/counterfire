@@ -1,12 +1,11 @@
 // Counterfire entry point: engine setup, the fixed-step loop and the per-frame render hooks.
 //
-// Milestone 1 build: one tank per player drives on training-01. `?players=2` adds a second
-// player for the split-screen test. The bunker screen and vehicle choice come in milestone 2;
-// until then Ground Fire with no vehicle rolls out a new tank.
+// Milestone 2 build: players start in the bunker on training-01 and pick a vehicle.
+// `?players=2` adds a second player for split-screen and two-player rules (mines).
+// `?showcase` parks one of each vehicle by the bunker under a close camera, to check the models.
 
 import {
   engineInit,
-  keyWasPressed,
   Render3DPlugin,
   render3D,
   rgb,
@@ -22,11 +21,12 @@ import { SceneView } from './render/scene';
 import { toWorld } from './render/terrain';
 import { PlayerView, SplitScreen } from './render/views';
 import type { InputFrame, PlayerId } from './sim/types';
-import { World } from './sim/world';
-import { drawHud, type HudSlot } from './ui/hud';
+import { VEHICLE_ORDER, World } from './sim/world';
+import { drawHud } from './ui/hud';
 
 const params = new URLSearchParams(location.search);
 const twoPlayers = params.get('players') === '2';
+const showcase = params.has('showcase');
 const seed = Number(params.get('seed') ?? Date.now() % 1e9);
 
 let world: World;
@@ -66,14 +66,32 @@ function gameInit() {
   render3D.sunColor = rgb(1, 0.96, 0.88);
   render3D.shadowRange = 30;
   render3D.setFog(40, 90);
-  render3D.onRenderOpaque = () => scene.drawShots();
+  render3D.onRenderOpaque = () => scene.drawDynamic();
 
   world = new World(loadLevel(), seed);
   players = [...world.players.keys()];
   bindings = loadBindings();
-  for (const p of players) world.spawnVehicle(p, 'tank');
+  if (showcase) parkShowcase();
   scene = new SceneView(world);
   split.views = players.map((p) => new PlayerView(vehiclePos(p)));
+}
+
+/** One of each vehicle in a row beside the P1 bunker, the helicopter flying, the jeep's tyres up. */
+function parkShowcase() {
+  const bunker = world.player('P1').bunker;
+  VEHICLE_ORDER.forEach((type, i) => {
+    const v = world.spawnVehicle('P1', type);
+    v.x = bunker.x - 2.4 + i * 1.6;
+    v.y = bunker.y + 2;
+    v.heading = 0.5;
+    v.turret = type === 'tank' ? -0.9 : 0;
+    if (type === 'jeep') v.tyresInflated = true;
+    if (type === 'heli') v.altitude = 0.3;
+  });
+  const p = world.player('P1');
+  p.vehicle = undefined;
+  p.mode = 'field';
+  p.lostTimer = Number.POSITIVE_INFINITY;
 }
 
 function gameUpdate() {
@@ -81,17 +99,19 @@ function gameUpdate() {
   for (const p of players) inputs[p] = readInput(bindings[p]);
   world.step(inputs);
   scene.handleEvents(world.events);
-
-  // stand-in for the bunker until milestone 2
-  for (const p of players) {
-    const v = world.players.get(p)?.vehicle;
-    if (v?.state !== 'active' && bindings[p].fireGround.some((k) => keyWasPressed(k)))
-      world.spawnVehicle(p, 'tank');
-  }
 }
 
 function gameUpdatePost() {
   scene.sync();
+  if (showcase) {
+    const b = world.player('P1').bunker;
+    const view = split.views[0];
+    if (view) {
+      view.camera.pos = toWorld(b.x, b.y - 2.5, 4.2);
+      view.camera.lookAt(toWorld(b.x, b.y + 2, 0.4));
+    }
+    return;
+  }
   players.forEach((p, i) => {
     split.views[i]?.follow(vehiclePos(p));
   });
@@ -102,18 +122,7 @@ function gameRender() {
 }
 
 function gameRenderPost() {
-  const slots: HudSlot[] = players.map((p) => {
-    const vehicle = world.players.get(p)?.vehicle;
-    const lost = vehicle && vehicle.state !== 'active';
-    const message =
-      vehicle?.state === 'destroyed'
-        ? 'VEHICLE LOST - FIRE FOR A NEW TANK'
-        : lost
-          ? 'OUT OF FUEL - FIRE FOR A NEW TANK'
-          : undefined;
-    return { player: p, vehicle: lost ? undefined : vehicle, message };
-  });
-  drawHud(slots);
+  if (!showcase) drawHud(world, bindings);
 }
 
 engineInit(gameInit, gameUpdate, gameUpdatePost, gameRender, gameRenderPost);
