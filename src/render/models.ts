@@ -7,6 +7,7 @@ import {
   buildCylinder,
   buildMatrix,
   buildSphere,
+  buildTorus,
   type Color,
   Mesh,
   rgb,
@@ -284,5 +285,39 @@ export function buildSubmarine(): Mesh {
   );
   m.combine(buildBox(vec3(0.3, 0.5, 0.7), 0.05), vec3(0, 0.35, -0.2), rgb(0.15, 0.16, 0.18));
   m.combine(buildBox(vec3(0.8, 0.04, 0.2)), vec3(0, 0.45, -0.3), rgb(0.15, 0.16, 0.18));
+  return m;
+}
+
+export interface FlagMeshes {
+  pole: Mesh;
+  cloth: Mesh;
+}
+
+/** A flag on a short pole; the cloth is separate so it can flutter. The pole stands on the origin. */
+export function buildFlag(team: Team): FlagMeshes {
+  const pole = new Mesh();
+  pole.combine(buildCylinder(0.04, 0.9, 6), vec3(0, 0.45, 0), rgb(0.85, 0.85, 0.8));
+  pole.combine(buildSphere(0.08, 6, 4), vec3(0, 0.92, 0), rgb(0.9, 0.8, 0.3));
+  const cloth = new Mesh();
+  // hangs from the pole toward +X, its edge on the cloth object's origin
+  cloth.combine(buildBox(vec3(0.42, 0.28, 0.02)), vec3(0.21, 0, 0), TEAM_COLORS[team]);
+  cloth.combine(buildBox(vec3(0.14, 0.1, 0.025)), vec3(0.21, 0, 0), WHITE);
+  return { pole, cloth };
+}
+
+/** A CPU drone: a small hovering saucer with four rotor rings and a gun under the nose, facing -Z. */
+export function buildDrone(team: Team): Mesh {
+  const m = new Mesh();
+  m.combine(buildCylinder(0.36, 0.12, 10), vec3(), rgb(0.3, 0.3, 0.32));
+  m.combine(buildSphere(0.2, 8, 5), vec3(0, 0.08, 0), TEAM_COLORS[team]);
+  for (const [x, z] of [
+    [-0.24, -0.24],
+    [0.24, -0.24],
+    [-0.24, 0.24],
+    [0.24, 0.24],
+  ] as const) {
+    m.combine(buildTorus(0.24, 0.04, 10, 4), vec3(x, 0.04, z), DARK);
+  }
+  m.combine(buildCylinder(0.04, 0.3, 5), buildMatrix(vec3(0, -0.08, -0.2), vec3(Math.PI / 2, 0, 0)), STEEL);
   return m;
 }

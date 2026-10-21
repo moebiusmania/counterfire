@@ -7,7 +7,7 @@ import type { Vehicle } from './vehicle';
 
 /**
  * Jeep (SPEC §6.4): fastest, unarmoured, throws grenades. Air Fire inflates or deflates the
- * tyres; inflated it can cross deep water. Carrying the flag arrives in milestone 4.
+ * tyres; inflated it can cross deep water. It is the only vehicle that carries a flag.
  */
 export function updateJeep(jeep: Vehicle, input: InputFrame, pressed: InputFrame, world: World): void {
   const inWater = world.terrain.at(jeep.x, jeep.y) === Tile.Deep;
@@ -26,6 +26,9 @@ export function updateJeep(jeep: Vehicle, input: InputFrame, pressed: InputFrame
       ? JEEP.inflatedLandSpeed
       : jeep.tuning.maxSpeed;
   driveGround(jeep, input, world, maxSpeed);
+
+  // Switch drops a carried flag (SPEC §7)
+  if (pressed.switch) world.dropCarriedFlag(jeep);
 
   // grenades are lobbed over the bonnet and land a few tiles ahead
   if (weaponReady(jeep) && input.fireGround && useAmmo(jeep, world, jeep.tuning.fireCooldown))

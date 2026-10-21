@@ -1,12 +1,14 @@
 // Counterfire entry point: engine setup, the fixed-step loop and the per-frame render hooks.
 //
-// Milestone 2 build: players start in the bunker on training-01 and pick a vehicle.
-// `?players=2` adds a second player for split-screen and two-player rules (mines).
+// Milestone 4 build: a full game on training-01: find the CPU flag, carry it home by jeep.
+// `?players=2` turns the map into a two-player battle for split-screen and two-player rules.
 // `?showcase` freezes a line-up of every vehicle, structure and soldier under a close camera,
 // to check the models.
 
 import {
   engineInit,
+  engineObjectsDestroy,
+  keyWasPressed,
   Render3DPlugin,
   render3D,
   rgb,
@@ -16,14 +18,18 @@ import {
   vec3,
 } from 'littlejsengine';
 import training01 from '../assets/levels/training-01.json';
+import { playSfx } from './audio/sfx';
 import { type Bindings, loadBindings, readInput } from './input/bindings';
 import type { Level } from './levels/schema';
 import { SceneView } from './render/scene';
 import { toWorld } from './render/terrain';
 import { PlayerView, SplitScreen } from './render/views';
+import { type BeaconLight, jeepBeacon } from './sim/beacon';
+import { Drone } from './sim/drones';
+import { GAME_OVER_TICKS } from './sim/tuning';
 import type { InputFrame, PlayerId } from './sim/types';
 import { VEHICLE_ORDER, World } from './sim/world';
-import { drawHud } from './ui/hud';
+import { clearBanners, drawHud, updateBanners } from './ui/hud';
 
 const params = new URLSearchParams(location.search);
 const twoPlayers = params.get('players') === '2';
@@ -35,8 +41,13 @@ let scene: SceneView;
 let split: SplitScreen;
 let bindings: Record<PlayerId, Bindings>;
 let players: PlayerId[];
+/** Last beacon colour per player, to chime when it turns green (SPEC §6.4). */
+const beacons = new Map<PlayerId, BeaconLight>();
 
-/** training-01 is a one-player map; for the split-screen test, put a P2 bunker on the far road. */
+/**
+ * training-01 is a one-player map. For two players, P2 takes over the CPU compound and its
+ * towers, and P1 gets two towers of its own by the bunker.
+ */
 function loadLevel(): Level {
   const level = structuredClone(training01) as Level;
   if (showcase) {
@@ -53,10 +64,15 @@ function loadLevel(): Level {
   }
   if (!twoPlayers) return level;
   level.players = 2;
-  level.entities.push({ id: 'p2-bunker', type: 'bunker', team: 'P2', x: 30.5, y: 18.5, rot: Math.PI });
+  const p2Towers = level.flagCandidates.CPU ?? [];
+  for (const e of level.entities) if (e.id && p2Towers.includes(e.id)) e.team = 'P2';
+  level.entities.push(
+    { id: 'p2-bunker', type: 'bunker', team: 'P2', x: 30.5, y: 18.5, rot: Math.PI },
+    { id: 'p1-tower-1', type: 'flagTower', team: 'P1', x: 10.5, y: 7.5 },
+    { id: 'p1-tower-2', type: 'flagTower', team: 'P1', x: 14.5, y: 7.5 },
+  );
   level.stock.P2 = { tank: 3, asv: 2, heli: 2, jeep: 3 };
-  level.flagCandidates.P1 = [];
-  level.flagCandidates.P2 = level.flagCandidates.CPU ?? [];
+  level.flagCandidates = { P1: ['p1-tower-1', 'p1-tower-2'], P2: p2Towers };
   return level;
 }
 
@@ -80,10 +96,17 @@ function gameInit() {
   render3D.shadowRange = 30;
   render3D.setFog(40, 90);
   render3D.onRenderOpaque = () => scene.drawDynamic();
-
-  world = new World(loadLevel(), seed);
-  players = [...world.players.keys()];
   bindings = loadBindings();
+  startGame(seed);
+}
+
+/** A fresh world and everything drawn for it; also how a finished game restarts. */
+function startGame(gameSeed: number) {
+  engineObjectsDestroy();
+  clearBanners();
+  beacons.clear();
+  world = new World(loadLevel(), gameSeed);
+  players = [...world.players.keys()];
   if (showcase) parkShowcase();
   scene = new SceneView(world);
   split.views = players.map((p) => new PlayerView(vehiclePos(p)));
@@ -119,6 +142,11 @@ function parkShowcase() {
     const s = world.spawnSoldier(i % 2 ? 'CPU' : 'NEUTRAL', bunker.x - 1.5 + i * 0.5, bunker.y + 0.9);
     s.state = i === 3 ? 'dead' : i % 2 ? 'waving' : 'running';
   }
+  const flag = world.flags[0];
+  if (flag) Object.assign(flag, { state: 'exposed', x: bunker.x + 1.2, y: bunker.y + 0.9 });
+  const drone = new Drone(0, 'CPU', 'showcase', bunker.x - 2.6, bunker.y + 0.6);
+  drone.heading = -0.4;
+  world.drones.push(drone);
 }
 
 function gameUpdate() {
@@ -127,6 +155,30 @@ function gameUpdate() {
   for (const p of players) inputs[p] = readInput(bindings[p]);
   world.step(inputs);
   scene.handleEvents(world.events);
+  updateBanners(world, world.events);
+  for (const e of world.events) {
+    if (e.type !== 'gameOver') continue;
+    // two players share one screen, so a win for either sounds like a win
+    const won = e.winner !== 'CPU' && e.winner !== 'draw';
+    playSfx(won ? 'victory' : 'defeat');
+  }
+  chimeBeacons();
+
+  const o = world.outcome;
+  if (o && world.tick - o.tick > GAME_OVER_TICKS) {
+    if (players.some((p) => bindings[p].fireGround.some((k) => keyWasPressed(k))))
+      startGame(seed + world.tick);
+  }
+}
+
+/** The jeep's beacon chimes as it swings onto the enemy flag. */
+function chimeBeacons() {
+  for (const p of players) {
+    const v = world.players.get(p)?.vehicle;
+    const light = v?.type === 'jeep' && v.controllable ? jeepBeacon(world, v) : 'off';
+    if (light === 'green' && beacons.get(p) !== 'green') playSfx('ping');
+    beacons.set(p, light);
+  }
 }
 
 function gameUpdatePost() {

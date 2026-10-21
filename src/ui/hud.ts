@@ -3,10 +3,17 @@
 
 import { mainCanvasSize, mainContext } from 'littlejsengine';
 import type { Bindings } from '../input/bindings';
+import { jeepBeacon } from '../sim/beacon';
 import { outOfBounds } from '../sim/submarine';
-import { BUNKER } from '../sim/tuning';
-import type { PlayerId, VehicleType } from '../sim/types';
-import { type PlayerState, VEHICLE_ORDER, type World } from '../sim/world';
+import { BUNKER, GAME_OVER_TICKS } from '../sim/tuning';
+import type { PlayerId, Team, VehicleType } from '../sim/types';
+import {
+  type GameOverReason,
+  type PlayerState,
+  type SimEvent,
+  VEHICLE_ORDER,
+  type World,
+} from '../sim/world';
 
 const BAR_W = 140;
 const BAR_H = 10;
@@ -32,6 +39,44 @@ export function keyLabel(code: string | undefined): string {
 
 type Ctx = CanvasRenderingContext2D;
 
+/** Ticks a banner stays up. */
+const BANNER_TICKS = 180;
+const banners = new Map<PlayerId, { text: string; until: number }>();
+
+/** Turn this tick's flag events into a banner for each player they concern (SPEC §7). */
+export function updateBanners(world: World, events: readonly SimEvent[]): void {
+  const say = (player: PlayerId, text: string) =>
+    banners.set(player, { text, until: world.tick + BANNER_TICKS });
+  const own = (p: PlayerId, team: Team) => p === team;
+  for (const e of events) {
+    for (const p of world.players.keys()) {
+      switch (e.type) {
+        case 'flagExposed':
+          say(p, own(p, e.team) ? 'YOUR FLAG HAS BEEN FOUND!' : 'ENEMY FLAG EXPOSED!');
+          break;
+        case 'flagPickedUp':
+          if (e.by === p)
+            say(p, own(p, e.team) ? 'YOU HAVE YOUR FLAG - HIDE IT' : 'YOU HAVE THE FLAG - BRING IT HOME!');
+          else if (own(p, e.team)) say(p, 'THE ENEMY HAS YOUR FLAG!');
+          break;
+        case 'flagDropped':
+          if (own(p, e.team)) say(p, 'YOUR FLAG IS ON THE GROUND');
+          else say(p, 'THE ENEMY FLAG IS DOWN');
+          break;
+        case 'flagReturned':
+          if (own(p, e.team)) say(p, 'FLAG HIDDEN IN A NEW TOWER');
+          break;
+        default:
+          break;
+      }
+    }
+  }
+}
+
+export function clearBanners(): void {
+  banners.clear();
+}
+
 /** Draw each player's overlay over their share of the screen, left to right. */
 export function drawHud(world: World, bindings: Record<PlayerId, Bindings>): void {
   const ctx = mainContext;
@@ -45,12 +90,46 @@ export function drawHud(world: World, bindings: Record<PlayerId, Bindings>): voi
     ctx.textBaseline = 'middle';
     if (p.mode === 'bunker') drawBunker(ctx, p, x0, slotW, keys);
     else drawField(ctx, world, p, x0, slotW, keys);
+    const banner = banners.get(p.id);
+    if (banner && banner.until > world.tick)
+      centered(ctx, banner.text, x0 + slotW / 2, mainCanvasSize.y * 0.12, 1);
+    if (world.outcome) drawGameOver(ctx, world, p, x0, slotW, keys);
     ctx.restore();
   });
   if (players.length > 1) {
     ctx.fillStyle = '#000';
     ctx.fillRect(mainCanvasSize.x / 2 - 1, 0, 2, mainCanvasSize.y);
   }
+}
+
+const REASONS: Record<GameOverReason, string> = {
+  flagCaptured: 'THE FLAG WAS CAPTURED',
+  outOfVehicles: 'OUT OF VEHICLES',
+  outOfJeeps: 'NO JEEPS LEFT TO CARRY THE FLAG',
+  stalemate: 'NEITHER SIDE CAN CARRY A FLAG',
+};
+
+/** The end of the game: who won, why, and how to play again. The full victory sequence is milestone 6. */
+function drawGameOver(ctx: Ctx, world: World, p: PlayerState, x0: number, w: number, keys: Bindings): void {
+  const o = world.outcome;
+  if (!o) return;
+  const h = mainCanvasSize.y;
+  ctx.fillStyle = 'rgba(0, 0, 0, .55)';
+  ctx.fillRect(x0, 0, w, h);
+  const title = o.winner === 'draw' ? 'DRAW' : o.winner === p.id ? 'VICTORY!' : 'DEFEAT';
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.font = 'bold 48px monospace';
+  ctx.fillStyle = o.winner === p.id ? '#f2d43a' : o.winner === 'draw' ? '#ddd' : '#d44';
+  ctx.fillText(title, x0 + w / 2, h * 0.4);
+  ctx.font = 'bold 18px monospace';
+  ctx.fillStyle = '#eee';
+  ctx.fillText(REASONS[o.reason], x0 + w / 2, h * 0.4 + 46);
+  if (world.tick - o.tick > GAME_OVER_TICKS) {
+    ctx.font = '16px monospace';
+    ctx.fillText(`${keyLabel(keys.fireGround[0])} TO PLAY AGAIN`, x0 + w / 2, h * 0.4 + 84);
+  }
+  ctx.restore();
 }
 
 function drawBunker(ctx: Ctx, p: PlayerState, x0: number, w: number, keys: Bindings): void {
@@ -119,6 +198,7 @@ function drawField(ctx: Ctx, world: World, p: PlayerState, x0: number, w: number
     ctx.fillStyle = '#ccc';
     ctx.fillText(extra, x0 + 20, y + 58);
   }
+  if (v.type === 'jeep') drawBeacon(ctx, jeepBeacon(world, v), x0 + BAR_W + 92, y - 4);
   if (v.resupplying) centered(ctx, 'RESUPPLYING', x0 + w / 2, h * 0.2, 1);
   const warning = dangerWarning(world, p);
   if (warning) centered(ctx, warning, x0 + w / 2, h * 0.3, (world.tick >> 4) % 2 ? 1 : 0.5);
@@ -147,11 +227,28 @@ function vehicleExtras(world: World, p: PlayerState): string | undefined {
       return `WEAPON ${v.weapon === 'gun' ? 'GUN' : 'ROCKETS'}  ROCKETS ${v.rockets}`;
     case 'asv':
       return world.minesAllowed ? `MINES ${v.mines}` : undefined;
-    case 'jeep':
-      return `TYRES ${v.tyresInflated ? 'INFLATED' : 'DEFLATED'}  GRENADES ${v.ammo}`;
+    case 'jeep': {
+      const flag = world.carriedBy(v);
+      const carrying = flag ? `  FLAG: ${flag.team === v.team ? 'OURS' : 'ENEMY'}` : '';
+      return `TYRES ${v.tyresInflated ? 'UP' : 'DOWN'}  GRENADES ${v.ammo}${carrying}`;
+    }
     default:
       return undefined;
   }
+}
+
+/** The dashboard beacon: a lamp that glows green toward the exposed enemy flag, red toward home. */
+function drawBeacon(ctx: Ctx, light: 'green' | 'red' | 'off', x: number, y: number): void {
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(x, y, 7, 0, Math.PI * 2);
+  ctx.fillStyle = light === 'green' ? '#3f3' : light === 'red' ? '#f33' : '#333';
+  if (light !== 'off') {
+    ctx.shadowColor = ctx.fillStyle;
+    ctx.shadowBlur = 12;
+  }
+  ctx.fill();
+  ctx.restore();
 }
 
 function centered(ctx: Ctx, text: string, x: number, y: number, alpha: number): void {

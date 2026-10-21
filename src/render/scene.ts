@@ -11,10 +11,11 @@ import {
   vec3,
 } from 'littlejsengine';
 import { playSfx } from '../audio/sfx';
+import type { Flag } from '../sim/flags';
 import type { Soldier } from '../sim/soldiers';
 import type { Structure } from '../sim/structures';
 import { Tile } from '../sim/terrain';
-import { HELI } from '../sim/tuning';
+import { DRONES, HELI } from '../sim/tuning';
 import type { Vehicle } from '../sim/vehicles/vehicle';
 import type { Shot, SimEvent, World } from '../sim/world';
 import {
@@ -23,6 +24,8 @@ import {
   buildBunker,
   buildBunkerLamp,
   buildDepot,
+  buildDrone,
+  buildFlag,
   buildFlagTower,
   buildHeli,
   buildJeep,
@@ -33,7 +36,7 @@ import {
   buildTank,
   buildTurretParts,
 } from './models';
-import { TerrainView, toWorld } from './terrain';
+import { SEA_LEVEL, TerrainView, toWorld } from './terrain';
 
 interface VehicleView {
   root: EngineObject3D;
@@ -71,12 +74,23 @@ export class SceneView {
   private readonly mineMesh = buildMine();
   private readonly rubbleMesh = buildRubble();
   private readonly sub: EngineObject3D;
+  private readonly flags = new Map<Flag, { pole: EngineObject3D; cloth: EngineObject3D }>();
+  private readonly drones = new Map<number, EngineObject3D>();
+  private readonly droneMesh = buildDrone('CPU');
+  private frame = 0;
 
   constructor(private readonly world: World) {
     this.terrain = new TerrainView(world.terrain);
     for (const t of world.structures) this.addStructure(t);
     this.sub = new EngineObject3D(toWorld(0, 0, -3), buildSubmarine());
     this.sub.castShadow = false;
+    for (const f of world.flags) {
+      const meshes = buildFlag(f.team);
+      const pole = new EngineObject3D(toWorld(f.x, f.y, -5), meshes.pole);
+      const cloth = new EngineObject3D(vec3(0.03, 0.78, 0), meshes.cloth);
+      pole.addChild(cloth);
+      this.flags.set(f, { pole, cloth });
+    }
     for (const p of world.players.values()) {
       const lamp = new EngineObject3D(toWorld(p.bunker.x + 0.75, p.bunker.y + 0.75, 0.2), buildBunkerLamp());
       lamp.color = LAMP_OFF;
@@ -166,6 +180,49 @@ export class SceneView {
     return mesh;
   }
 
+  private syncFlags(): void {
+    for (const [f, view] of this.flags) {
+      let pos = toWorld(f.x, f.y, -5); // hidden: out of sight under the tower
+      let yaw = 0;
+      if (f.state === 'exposed') pos = toWorld(f.x, f.y);
+      if (f.state === 'floating')
+        pos = toWorld(f.x, f.y, SEA_LEVEL - 0.3 + Math.sin(this.frame * 0.05) * 0.05);
+      if (f.state === 'carried') {
+        // on the jeep's flag mount, back right
+        const jeep = this.world.vehicles.find((v) => v.id === f.carrier);
+        if (jeep) {
+          const c = Math.cos(jeep.heading);
+          const s = Math.sin(jeep.heading);
+          pos = toWorld(jeep.x + 0.17 * c - 0.3 * s, jeep.y + 0.17 * s + 0.3 * c, 0.3);
+          yaw = jeep.heading;
+        }
+      }
+      view.pole.pos3D = pos;
+      view.pole.rotation3D = vec3(0, yaw, 0);
+      view.cloth.rotation3D = vec3(0, Math.sin(this.frame * 0.15 + f.x) * 0.35, 0);
+    }
+  }
+
+  private syncDrones(): void {
+    const alive = new Set<number>();
+    for (const d of this.world.drones) {
+      alive.add(d.id);
+      let obj = this.drones.get(d.id);
+      if (!obj) {
+        obj = new EngineObject3D(toWorld(d.x, d.y), this.droneMesh);
+        obj.softShadow = 0.7;
+        this.drones.set(d.id, obj);
+      }
+      obj.pos3D = toWorld(d.x, d.y, DRONES.hoverHeight + Math.sin(this.frame * 0.08 + d.id) * 0.08);
+      obj.rotation3D = vec3(0, d.heading, 0);
+    }
+    for (const [id, obj] of this.drones) {
+      if (alive.has(id)) continue;
+      obj.destroy();
+      this.drones.delete(id);
+    }
+  }
+
   private syncSubmarine(): void {
     const sub = this.world.submarine;
     // under the waves it sits deep enough to vanish; surfaced its deck is just awash
@@ -179,6 +236,9 @@ export class SceneView {
     this.syncStructures();
     this.syncSoldiers();
     this.syncSubmarine();
+    this.syncFlags();
+    this.syncDrones();
+    this.frame++;
     const alive = new Set<number>();
     for (const v of this.world.vehicles) {
       alive.add(v.id);
@@ -304,6 +364,12 @@ export class SceneView {
         case 'soldierKilled':
           playSfx('scream', toWorld(e.x, e.y));
           break;
+        case 'flagExposed':
+          playSfx('flagExposed');
+          break;
+        case 'flagPickedUp':
+          playSfx('flagTaken');
+          break;
         case 'subSurfacing':
           splash(e.x, e.y);
           playSfx('klaxon', toWorld(e.x, e.y));
@@ -360,6 +426,8 @@ function shotHeight(s: Shot): number {
       return HELI.flightHeight * (1 - f) + 0.15;
     case 'turretMissile':
       return 0.8;
+    case 'droneGun':
+      return DRONES.hoverHeight;
     case 'subMissile':
       return 1.2;
     case 'grenade':
@@ -382,6 +450,7 @@ function drawShot(s: Shot): void {
       render3D.drawSphere(toWorld(s.x - s.dx * 0.6, s.y - s.dy * 0.6, h), 0.16, rgb(1, 0.6, 0.2));
       break;
     case 'heliGun':
+    case 'droneGun':
       render3D.drawSphere(pos, 0.07, rgb(1, 1, 0.6));
       break;
     case 'grenade':

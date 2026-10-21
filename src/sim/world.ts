@@ -1,12 +1,14 @@
 // The deterministic simulation (SPEC §3.1, §4). No rendering, no DOM, no Math.random().
 
 import type { Level, LevelEntity, Stock } from '../levels/schema';
+import { Drone, updateDrone } from './drones';
+import { dropFlag, exposeFlag, Flag, hideFlag, updateFlag } from './flags';
 import { Rng } from './rng';
 import { Soldier, updateSoldier } from './soldiers';
 import { Structure } from './structures';
 import { Submarine, updateSubmarine } from './submarine';
 import { blocksShots, type Collider, type Mobility, Terrain, Tile } from './terrain';
-import { BUNKER, DEPOT, MINES, type ShotKind, type ShotTuning, SOLDIERS, STRUCTURES } from './tuning';
+import { BUNKER, DEPOT, DRONES, MINES, type ShotKind, type ShotTuning, SOLDIERS, STRUCTURES } from './tuning';
 import { headingTo, updateTurret } from './turrets';
 import { EMPTY_INPUT, type InputFrame, type PlayerId, type Team, type VehicleType, wrapAngle } from './types';
 import { updateAsv } from './vehicles/asv';
@@ -76,7 +78,22 @@ export type SimEvent =
   | { type: 'stockEmpty'; player: PlayerId; vehicleType: VehicleType }
   | { type: 'deploy'; player: PlayerId; vehicle: number }
   | { type: 'returned'; player: PlayerId; vehicleType: VehicleType }
-  | { type: 'selfDestruct'; vehicle: number };
+  | { type: 'selfDestruct'; vehicle: number }
+  | { type: 'flagExposed'; team: Team; x: number; y: number }
+  | { type: 'flagPickedUp'; team: Team; vehicle: number; by: PlayerId }
+  | { type: 'flagDropped'; team: Team; x: number; y: number }
+  | { type: 'flagReturned'; team: Team }
+  | { type: 'flagCaptured'; team: Team; by: PlayerId }
+  | { type: 'droneDestroyed'; drone: number; x: number; y: number }
+  | { type: 'gameOver'; winner: Team | 'draw'; reason: GameOverReason };
+
+export type GameOverReason = 'flagCaptured' | 'outOfVehicles' | 'outOfJeeps' | 'stalemate';
+
+export interface Outcome {
+  winner: Team | 'draw';
+  reason: GameOverReason;
+  tick: number;
+}
 
 export type PlayerMode = 'bunker' | 'field';
 
@@ -110,6 +127,12 @@ export class World implements Collider {
   readonly shots: Shot[] = [];
   readonly mines: Mine[] = [];
   readonly submarine = new Submarine();
+  readonly flags: Flag[] = [];
+  readonly drones: Drone[] = [];
+  /** Ticks until each drone spawn (by level entity id) launches a replacement. */
+  private readonly droneRespawn = new Map<string, number>();
+  /** Set once the game is won, lost or drawn; the world stops after that. */
+  outcome?: Outcome;
   events: SimEvent[] = [];
   tick = 0;
   private nextId = 1;
@@ -122,6 +145,13 @@ export class World implements Collider {
     this.terrain = new Terrain(level.tiles);
     for (const e of level.entities) {
       if (e.type !== 'droneSpawn') this.structures.push(new Structure(this.nextId++, e));
+      else this.droneRespawn.set(e.id ?? `drone-${this.nextId++}`, 0);
+    }
+    // each side's flag hides in one of its flag towers (SPEC §7)
+    const sides: Team[] = level.players === 1 ? ['CPU'] : ['P1', 'P2'];
+    for (const side of sides) {
+      const flag = new Flag(side);
+      if (hideFlag(flag, this)) this.flags.push(flag);
     }
     const ids: PlayerId[] = level.players === 1 ? ['P1'] : ['P1', 'P2'];
     for (const id of ids) {
@@ -227,6 +257,7 @@ export class World implements Collider {
   step(inputs: Partial<Record<PlayerId, InputFrame>> = {}): void {
     this.events = [];
     this.tick++;
+    if (this.outcome) return;
 
     for (const v of this.vehicles) v.savePrev();
     for (const p of this.players.values()) {
@@ -241,13 +272,88 @@ export class World implements Collider {
     this.updateDepots();
     for (const s of this.structures) if (s.type === 'turret' && !s.destroyed) updateTurret(s, this);
     updateSubmarine(this.submarine, this);
+    this.updateDrones();
     this.updateShots();
     this.separateVehicles();
     this.updateMines();
     this.updateSoldiers();
     this.sinkVehicles();
+    for (const f of this.flags) updateFlag(f, this);
     this.clearWrecks();
     for (let i = this.shots.length; i--; ) if (!this.shots[i]?.alive) this.shots.splice(i, 1);
+    this.checkDefeat();
+  }
+
+  // --- the end (SPEC §5.3) ---
+
+  endGame(winner: Team | 'draw', reason: GameOverReason): void {
+    if (this.outcome) return;
+    this.outcome = { winner, reason, tick: this.tick };
+    this.emit({ type: 'gameOver', winner, reason });
+  }
+
+  /**
+   * A player with no vehicles left loses. With no jeep left a player can never capture a flag:
+   * alone against the CPU that is a loss, and when neither player has one it is a draw. [VERIFY]
+   */
+  private checkDefeat(): void {
+    if (this.outcome) return;
+    const status = [...this.players.values()].map((p) => {
+      const v = p.vehicle?.state === 'active' ? p.vehicle : undefined;
+      const stock = VEHICLE_ORDER.reduce((n, t) => n + p.stock[t], 0);
+      return { id: p.id, hasVehicle: !!v || stock > 0, hasJeep: v?.type === 'jeep' || p.stock.jeep > 0 };
+    });
+    if (this.level.players === 1) {
+      const p = status[0];
+      if (p && !p.hasVehicle) this.endGame('CPU', 'outOfVehicles');
+      else if (p && !p.hasJeep) this.endGame('CPU', 'outOfJeeps');
+      return;
+    }
+    const out = status.filter((p) => !p.hasVehicle);
+    if (out.length === 2) this.endGame('draw', 'outOfVehicles');
+    else if (out.length === 1) this.endGame(status.find((p) => p.hasVehicle)?.id ?? 'draw', 'outOfVehicles');
+    else if (status.every((p) => !p.hasJeep)) this.endGame('draw', 'stalemate');
+  }
+
+  // --- flags (SPEC §7) ---
+
+  /** The flag a jeep is carrying, if any. */
+  carriedBy(v: Vehicle): Flag | undefined {
+    return this.flags.find((f) => f.state === 'carried' && f.carrier === v.id);
+  }
+
+  /** Switch on a jeep with a flag: put it down here. */
+  dropCarriedFlag(v: Vehicle): void {
+    const flag = this.carriedBy(v);
+    if (flag) dropFlag(flag, this, v.x, v.y);
+  }
+
+  // --- drones (SPEC §8.3) ---
+
+  private updateDrones(): void {
+    for (const [spawnId, wait] of this.droneRespawn) {
+      if (this.drones.some((d) => d.spawn === spawnId)) continue;
+      if (wait > 0) {
+        this.droneRespawn.set(spawnId, wait - 1);
+        continue;
+      }
+      const e = this.level.entities.find((x) => x.id === spawnId);
+      if (e) this.drones.push(new Drone(this.nextId++, e.team ?? 'CPU', spawnId, e.x, e.y));
+    }
+    for (const d of this.drones) {
+      const e = this.level.entities.find((x) => x.id === d.spawn);
+      updateDrone(d, this, e?.x ?? d.x, e?.y ?? d.y);
+    }
+  }
+
+  private damageDrone(d: Drone, damage: number): void {
+    d.hp -= damage;
+    if (d.hp > 0) return;
+    const i = this.drones.indexOf(d);
+    if (i >= 0) this.drones.splice(i, 1);
+    this.droneRespawn.set(d.spawn, DRONES.respawnTicks);
+    this.emit({ type: 'droneDestroyed', drone: d.id, x: d.x, y: d.y });
+    this.explode(d.x, d.y, 1);
   }
 
   // --- bunker (SPEC §6, §9.2) ---
@@ -408,11 +514,12 @@ export class World implements Collider {
    * it chases whatever hot vehicle is nearest to it, whoever that is (SPEC §8.4).
    */
   private steer(s: Shot): void {
-    let target: Vehicle | undefined;
+    let target: { id: number; x: number; y: number } | undefined;
     if (s.tuning.homing === 'heat') {
+      // vehicles with their engines running, and drones (SPEC §8.4)
+      const hot = [...this.vehicles.filter((v) => v.controllable), ...this.drones];
       let best = Number.POSITIVE_INFINITY;
-      for (const v of this.vehicles) {
-        if (!v.controllable) continue;
+      for (const v of hot) {
         const d = Math.hypot(v.x - s.x, v.y - s.y);
         if (d < best) {
           best = d;
@@ -433,6 +540,13 @@ export class World implements Collider {
   }
 
   private collideShot(s: Shot): void {
+    // drones hover low enough for every weapon to hit them
+    for (const d of this.drones) {
+      if (d.id === s.owner || Math.hypot(d.x - s.x, d.y - s.y) > DRONES.radius) continue;
+      this.damageDrone(d, s.tuning.damage);
+      this.explodeShot(s, 0.5);
+      return;
+    }
     for (const v of this.vehicles) {
       if (v.id === s.owner || !v.alive || v.elevator > 0.5) continue;
       if (v.mobility === 'air' && !s.tuning.hitsAir) continue;
@@ -520,6 +634,7 @@ export class World implements Collider {
     const tx = Math.floor(t.x);
     const ty = Math.floor(t.y);
     if (this.terrain.get(tx, ty) !== Tile.Deep) this.terrain.set(tx, ty, Tile.Rubble);
+    for (const f of this.flags) if (f.state === 'hidden' && f.tower === t.id) exposeFlag(f, this);
     if (t.type === 'building' || t.type === 'flagTower') {
       const [min, max] = STRUCTURES.soldiers;
       const count = min + this.rng.int(max - min + 1);
@@ -684,6 +799,10 @@ export class World implements Collider {
     for (const s of this.soldiers) h.num(s.id).str(s.state).num(s.x).num(s.y).num(s.heading).num(s.timer);
     for (const s of this.shots) h.num(s.id).num(s.x).num(s.y).num(s.dx).num(s.dy).num(s.travelled);
     for (const m of this.mines) h.num(m.id).num(m.x).num(m.y);
+    for (const f of this.flags)
+      h.str(f.state).num(f.x).num(f.y).num(f.tower).num(f.carrier).num(f.pickupDelay);
+    for (const d of this.drones) h.num(d.id).num(d.x).num(d.y).num(d.heading).num(d.hp).num(d.cooldown);
+    h.str(this.outcome ? `${this.outcome.winner}:${this.outcome.reason}` : '');
     const sub = this.submarine;
     h.str(sub.state).num(sub.x).num(sub.y).num(sub.timer).num(sub.surfaced);
     return h.digest();

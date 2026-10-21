@@ -133,6 +133,13 @@
       "variant": "missile",
       "x": 31.5,
       "y": 16.5
+    },
+    {
+      "id": "cpu-drones",
+      "type": "droneSpawn",
+      "team": "CPU",
+      "x": 32.5,
+      "y": 20.5
     }
   ],
   "stock": {

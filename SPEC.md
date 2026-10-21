@@ -2,7 +2,7 @@
 
 **Counterfire** is a browser game that remakes **Return Fire** (Silent Software, 3DO 1995 / Windows 95 1996) and matches the original's gameplay feature for feature. It is built with **Bun**, **TypeScript** and **LittleJS**. Its levels and 3D models are new, made in the style of the original.
 
-> **Status:** v0.5, 2026-10-22. Milestones 0 to 3 are done (§15).
+> **Status:** v0.6, 2026-10-22. Milestones 0 to 4 are done (§15).
 > **Name:** Counterfire (§12.3).
 > **Source of truth for behaviour:** the original Windows 95 release. Where this spec and the original disagree on rules or mechanics, the original wins and this spec gets corrected. Levels and models deliberately differ from the original (§10, §12). Items marked **[VERIFY]** are not confirmed by a primary source yet. Someone must check them against the original game (by playing it or using the manual) before they count as final.
 
@@ -207,6 +207,21 @@ The manual does not settle these rules. The code uses the choices below until so
 - The map shows all flag buildings, and shows flags only once they have been found.
 
 ---
+
+### 7.1 Working assumptions (milestone 4)
+Each choice below is **[VERIFY]** against the original.
+
+| Topic | Current behaviour |
+|---|---|
+| Flags in one-player | Only the CPU has a flag. Two-player games have one flag per player. |
+| Hiding | The seed picks the tower from the side's `flagCandidates`. A side's own flag brought home goes to a different intact tower when there is one. |
+| Pick-up | Any jeep that drives within 0.55 tiles. After a drop, nobody can pick the flag up for 0.75 s. A jeep carries one flag at a time. |
+| Capture | Driving onto your own bunker with the enemy flag wins at once. No key press is needed. |
+| Dropping | Switch drops it. A destroyed jeep drops it where it was. Dropped in deep water, it drifts to the nearest land at 0.008 tiles per tick. |
+| Losing | A player with no vehicles left loses. Alone against the CPU, having no jeep left also loses. With two players, if neither has a jeep left the game is a draw. |
+| Game over | The world freezes. After 2 seconds, Ground Fire starts a new game. |
+| Jeep beacon | Facing means within 0.25 rad and more than 1 tile away. Green (with a chime) takes priority over red. |
+| Drones | Hovering CPU gunships, one per `droneSpawn`. They patrol 4 tiles around the spawn, chase vehicles within 7 tiles and fire within 5. They have 20 HP, every weapon can hit them, and they are replaced 20 s after being destroyed. They count as heat for the submarine's missile. |
 
 ## 8. World, structures and hazards
 
@@ -442,7 +457,7 @@ For each item in §6 to §11, record a side-by-side clip of the original and the
 | 1 | **Sim core** ✅ | tank drives on a test map, fixed-step sim, deterministic replay test |
 | 2 | **All vehicles** ✅ | 4 vehicles with weapons, fuel, ammo, damage, bunker loop |
 | 3 | **World** ✅ | structures, destruction, turrets, depots, bridges, soldiers, submarine |
-| 4 | **Rules** | flags, capture, win/loss, stock, 1P vs CPU with drones |
+| 4 | **Rules** ✅ | flags, capture, win/loss, stock, 1P vs CPU with drones |
 | 5 | **2-player** | split-screen, mines, flag-defence behaviours |
 | 6 | **UI/Audio** | bunker, map, radar, HUD, beacon, SFX, skull, victory |
 | 7 | **Content** | level editor + validator, all 72 maps built and playtested (§10.2) |

@@ -162,6 +162,35 @@ export const SUBMARINE = {
   diveTicks: 90,
 };
 
+/** Flags (SPEC §7). */
+export const FLAGS = {
+  /** How close a jeep must drive to pick a flag up. */
+  pickupRadius: 0.55,
+  /** A flag dropped at sea drifts back to shore this fast, tiles per tick. */
+  driftSpeed: 0.008,
+  /** Ticks after a drop before any jeep may pick the flag up again, so a drop is not undone at once. */
+  pickupDelay: 45,
+};
+
+/** CPU drones in one-player games (SPEC §8.3). [VERIFY] their form and behaviour. */
+export const DRONES = {
+  hp: 20,
+  radius: 0.3,
+  speed: 0.055,
+  turnRate: 0.05,
+  /** Patrol around the spawn within this radius; chase players seen within sightRange. */
+  patrolRadius: 4,
+  sightRange: 7,
+  fireRange: 5,
+  cooldown: 50,
+  /** Ticks before a destroyed drone is replaced. */
+  respawnTicks: 1200,
+  hoverHeight: 0.9,
+};
+
+/** Seconds of game time before a finished game takes Fire to restart. */
+export const GAME_OVER_TICKS = 120;
+
 export interface ShotTuning {
   speed: number;
   range: number;
@@ -202,6 +231,7 @@ export const SHOTS = {
     homing: 'target',
     turnRate: 0.06,
   },
+  droneGun: { speed: 0.3, range: 6, damage: 8, air: true, hitsAir: true },
   // the submarine's heat-seeker: hits anything, and whatever it hits is toast (SPEC §8.4)
   subMissile: {
     speed: 0.2,
