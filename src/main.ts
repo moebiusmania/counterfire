@@ -1,7 +1,7 @@
 // Counterfire entry point: engine setup, the fixed-step loop and the per-frame render hooks.
 //
-// Milestone 4 build: a full game on training-01: find the CPU flag, carry it home by jeep.
-// `?players=2` turns the map into a two-player battle for split-screen and two-player rules.
+// Milestone 5 build: training-01 alone against the CPU, or `?players=2` for a split-screen duel
+// on duel-01. `?level=<id>` picks any shipped level; gamepads 0 and 1 play alongside the keys.
 // `?showcase` freezes a line-up of every vehicle, structure and soldier under a close camera,
 // to check the models.
 
@@ -17,9 +17,10 @@ import {
   setShowSplashScreen,
   vec3,
 } from 'littlejsengine';
-import training01 from '../assets/levels/training-01.json';
-import { playSfx } from './audio/sfx';
+import { playSfx, setListeners } from './audio/sfx';
 import { type Bindings, loadBindings, readInput } from './input/bindings';
+import { mergeInputs, readGamepad } from './input/gamepad';
+import { defaultLevelId, getLevel } from './levels';
 import type { Level } from './levels/schema';
 import { SceneView } from './render/scene';
 import { toWorld } from './render/terrain';
@@ -32,8 +33,10 @@ import { VEHICLE_ORDER, World } from './sim/world';
 import { clearBanners, drawHud, updateBanners } from './ui/hud';
 
 const params = new URLSearchParams(location.search);
-const twoPlayers = params.get('players') === '2';
 const showcase = params.has('showcase');
+const levelId = showcase
+  ? 'training-01'
+  : (params.get('level') ?? defaultLevelId(params.get('players') === '2' ? 2 : 1));
 const seed = Number(params.get('seed') ?? Date.now() % 1e9);
 
 let world: World;
@@ -44,12 +47,9 @@ let players: PlayerId[];
 /** Last beacon colour per player, to chime when it turns green (SPEC §6.4). */
 const beacons = new Map<PlayerId, BeaconLight>();
 
-/**
- * training-01 is a one-player map. For two players, P2 takes over the CPU compound and its
- * towers, and P1 gets two towers of its own by the bunker.
- */
 function loadLevel(): Level {
-  const level = structuredClone(training01) as Level;
+  const level = getLevel(levelId) ?? getLevel(defaultLevelId(1));
+  if (!level) throw new Error(`no level '${levelId}'`);
   if (showcase) {
     const b = level.entities.find((e) => e.id === 'p1-bunker');
     const y = (b?.y ?? 0) + 4;
@@ -62,17 +62,6 @@ function loadLevel(): Level {
       { id: 'sc-rubble', type: 'building', team: 'NEUTRAL', x: x + 6.4, y },
     );
   }
-  if (!twoPlayers) return level;
-  level.players = 2;
-  const p2Towers = level.flagCandidates.CPU ?? [];
-  for (const e of level.entities) if (e.id && p2Towers.includes(e.id)) e.team = 'P2';
-  level.entities.push(
-    { id: 'p2-bunker', type: 'bunker', team: 'P2', x: 30.5, y: 18.5, rot: Math.PI },
-    { id: 'p1-tower-1', type: 'flagTower', team: 'P1', x: 10.5, y: 7.5 },
-    { id: 'p1-tower-2', type: 'flagTower', team: 'P1', x: 14.5, y: 7.5 },
-  );
-  level.stock.P2 = { tank: 3, asv: 2, heli: 2, jeep: 3 };
-  level.flagCandidates = { P1: ['p1-tower-1', 'p1-tower-2'], P2: p2Towers };
   return level;
 }
 
@@ -95,7 +84,7 @@ function gameInit() {
   render3D.sunColor = rgb(1, 0.96, 0.88);
   render3D.shadowRange = 30;
   render3D.setFog(40, 90);
-  render3D.onRenderOpaque = () => scene.drawDynamic();
+  render3D.onRenderOpaque = () => scene.drawDynamic(players[split.current] ?? 'P1');
   bindings = loadBindings();
   startGame(seed);
 }
@@ -152,7 +141,9 @@ function parkShowcase() {
 function gameUpdate() {
   if (showcase) return; // a still line-up
   const inputs: Partial<Record<PlayerId, InputFrame>> = {};
-  for (const p of players) inputs[p] = readInput(bindings[p]);
+  players.forEach((p, i) => {
+    inputs[p] = mergeInputs(readInput(bindings[p]), readGamepad(i));
+  });
   world.step(inputs);
   scene.handleEvents(world.events);
   updateBanners(world, world.events);
@@ -195,6 +186,8 @@ function gameUpdatePost() {
   players.forEach((p, i) => {
     split.views[i]?.follow(vehiclePos(p));
   });
+  // in split-screen each player hears from their own vehicle, on their own side
+  setListeners(players.length > 1 ? players.map((p, i) => ({ ...vehiclePos(p), pan: i ? 0.7 : -0.7 })) : []);
 }
 
 function gameRender() {

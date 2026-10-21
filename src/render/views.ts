@@ -59,6 +59,8 @@ interface Viewport {
 
 export class SplitScreen {
   views: PlayerView[] = [];
+  /** The view being drawn right now, for draws that differ per player. */
+  current = 0;
   private aspect?: number;
 
   /** Call before `new Render3DPlugin`, so this preRender runs ahead of the engine's 3D pass. */
@@ -94,11 +96,13 @@ export class SplitScreen {
     gl.scissor(vp.x, vp.y, vp.w, vp.h);
     this.aspect = vp.w / vp.h;
     render3D.camera = view.camera;
+    this.current = i;
   }
 
   private beginFirstView(): void {
     if (!this.views.length) return;
     render3D.shadows = !this.split;
+    this.current = 0;
     if (!this.split) {
       this.aspect = undefined;
       render3D.camera = (this.views[0] as PlayerView).camera;

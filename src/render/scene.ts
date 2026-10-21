@@ -16,6 +16,7 @@ import type { Soldier } from '../sim/soldiers';
 import type { Structure } from '../sim/structures';
 import { Tile } from '../sim/terrain';
 import { DRONES, HELI } from '../sim/tuning';
+import type { PlayerId } from '../sim/types';
 import type { Vehicle } from '../sim/vehicles/vehicle';
 import type { Shot, SimEvent, World } from '../sim/world';
 import {
@@ -342,9 +343,10 @@ export class SceneView {
   }
 
   /** Shots and mines, drawn straight from sim state; called inside each 3D pass. */
-  drawDynamic(): void {
+  drawDynamic(viewer: PlayerId): void {
     for (const s of this.world.shots) drawShot(s);
-    for (const m of this.world.mines) render3D.drawMesh(this.mineMesh, buildMatrix(toWorld(m.x, m.y)));
+    for (const m of this.world.minesSeenBy(viewer))
+      render3D.drawMesh(this.mineMesh, buildMatrix(toWorld(m.x, m.y)));
   }
 
   handleEvents(events: readonly SimEvent[]): void {
@@ -391,24 +393,36 @@ export class SceneView {
           if (e.on) playSfx('ping', this.vehiclePos(e.vehicle));
           break;
         case 'deploy':
-          playSfx('elevator');
+          playSfx('elevator', this.bunkerPos(e.player));
           break;
         case 'tyres':
           playSfx('tyres', this.vehiclePos(e.vehicle));
           break;
+        // interface sounds come from the player's own side in split-screen
         case 'mineLaid':
+          playSfx('select', toWorld(e.x, e.y));
+          break;
         case 'weaponSwitched':
+          playSfx('select', this.vehiclePos(e.vehicle));
+          break;
         case 'selectSlot':
-          playSfx('select');
+          playSfx('select', this.bunkerPos(e.player));
           break;
         case 'dryFire':
+          playSfx('click', this.vehiclePos(e.vehicle));
+          break;
         case 'stockEmpty':
-          playSfx('click');
+          playSfx('click', this.bunkerPos(e.player));
           break;
         default:
           break;
       }
     }
+  }
+
+  private bunkerPos(player: PlayerId) {
+    const b = this.world.players.get(player)?.bunker;
+    return b ? toWorld(b.x, b.y) : undefined;
   }
 
   private vehiclePos(id: number) {

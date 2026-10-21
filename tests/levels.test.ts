@@ -39,3 +39,32 @@ describe('validator', () => {
     expect(validateLevel(level)).toEqual([]);
   });
 });
+
+describe('level registry', () => {
+  test('lists every level file and nothing else', async () => {
+    const { LEVELS } = await import('../src/levels');
+    const ids = await Promise.all(files.map(async (f) => ((await Bun.file(f).json()) as Level).id));
+    expect(Object.keys(LEVELS).sort()).toEqual(ids.sort());
+  });
+
+  test('getLevel hands out copies', async () => {
+    const { getLevel } = await import('../src/levels');
+    const a = getLevel('duel-01');
+    const b = getLevel('duel-01');
+    if (!a || !b) throw new Error('missing duel-01');
+    a.tiles[0] = 'changed';
+    expect(b.tiles[0]).not.toBe('changed');
+  });
+
+  test('two-player maps built by tools/mirror-level.ts are point-symmetric', async () => {
+    const { getLevel } = await import('../src/levels');
+    const level = getLevel('duel-01');
+    if (!level) throw new Error('missing duel-01');
+    const h = level.tiles.length;
+    level.tiles.forEach((row, r) => {
+      expect([...(level.tiles[h - 1 - r] ?? '')].reverse().join('')).toBe(row);
+    });
+    const p1 = level.entities.filter((e) => e.team === 'P1').length;
+    expect(level.entities.filter((e) => e.team === 'P2').length).toBe(p1);
+  });
+});

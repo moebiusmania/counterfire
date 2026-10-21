@@ -247,6 +247,11 @@ export class World implements Collider {
     if (i >= 0) this.soldiers.splice(i, 1);
   }
 
+  /** Mines a player can see in the field: their own. Enemy mines show only on radar. [VERIFY] */
+  minesSeenBy(player: PlayerId): Mine[] {
+    return this.mines.filter((m) => m.team === player);
+  }
+
   layMine(v: Vehicle, x: number, y: number): void {
     const mine: Mine = { id: this.nextId++, team: v.team, x, y };
     this.mines.push(mine);

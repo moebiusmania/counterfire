@@ -2,7 +2,7 @@
 
 **Counterfire** is a browser game that remakes **Return Fire** (Silent Software, 3DO 1995 / Windows 95 1996) and matches the original's gameplay feature for feature. It is built with **Bun**, **TypeScript** and **LittleJS**. Its levels and 3D models are new, made in the style of the original.
 
-> **Status:** v0.6, 2026-10-22. Milestones 0 to 4 are done (§15).
+> **Status:** v0.7, 2026-10-22. Milestones 0 to 5 are done (§15).
 > **Name:** Counterfire (§12.3).
 > **Source of truth for behaviour:** the original Windows 95 release. Where this spec and the original disagree on rules or mechanics, the original wins and this spec gets corrected. Levels and models deliberately differ from the original (§10, §12). Items marked **[VERIFY]** are not confirmed by a primary source yet. Someone must check them against the original game (by playing it or using the manual) before they count as final.
 
@@ -193,6 +193,8 @@ The manual does not settle these rules. The code uses the choices below until so
 | Losing a vehicle | A destroyed or abandoned vehicle returns the player to the bunker after 2 seconds; the skull comes in M6. Wrecks burn for 3 seconds, then disappear. |
 | Bunker screen | Left/Right choose a slot and Ground Fire deploys. The map screen (Air Fire) comes in M6. |
 | Input | A key tapped between two updates still counts as one press. |
+| Mines in split-screen | Each player sees only their own mines on the field; enemy mines will show on radar (M6). |
+| Sound in split-screen | Each sound plays on the side of the player nearest it, quieter with distance. Interface sounds play from the player's own bunker or vehicle. |
 
 ## 7. Flags
 
@@ -355,6 +357,9 @@ interface Level {
 ### 10.4 Extensibility
 The schema and loader must also accept user-made or add-on map packs without code changes.
 
+### 10.4a Two-player maps
+Two-player maps are point-symmetric so both sides are equal. The designer draws the southern half in `assets/levels/src/<id>.half.json`, with P1's and neutral entities only. `bun tools/mirror-level.ts <half> <out>` turns it half a turn about the map centre and gives P2 the mirrored copy of everything P1 has. The tool validates the result and writes it to `assets/levels/`. The first one is `duel-01` "Twin Bridges". `src/levels/index.ts` lists every shipped level; `?level=<id>` loads one, and `?players=2` loads `duel-01`.
+
 ### 10.5 Level editor (development tool)
 A browser editor at `/editor` in dev builds. It paints the terrain grid, places entities, sets stock and flag candidates, runs the validator, and launches the map straight into a playtest. It exports JSON in the §10.3b schema. A later version could ship it to players.
 
@@ -429,7 +434,7 @@ v1 has no music. The game emits the events a future music layer will need: `vehi
 Players can rebind keys, and bindings persist in `localStorage`.
 
 ### 13.2 Gamepads
-Map two gamepads to the two players. The defaults are: left stick to drive, right stick or shoulder buttons for turret/bank, A = Ground Fire, B = Air Fire, X = Switch. LittleJS's on-screen gamepad is an optional touch layout.
+Gamepad 0 plays as P1 and gamepad 1 as P2, alongside the keyboard. The left stick or d-pad drives, the shoulder buttons and triggers turn the turret or bank, A is Ground Fire, B is Air Fire and X is Switch. LittleJS's on-screen gamepad is an optional touch layout. **[VERIFY]** the stick's up direction on real hardware; the mapping is unit-tested only.
 
 ---
 
@@ -458,7 +463,7 @@ For each item in §6 to §11, record a side-by-side clip of the original and the
 | 2 | **All vehicles** ✅ | 4 vehicles with weapons, fuel, ammo, damage, bunker loop |
 | 3 | **World** ✅ | structures, destruction, turrets, depots, bridges, soldiers, submarine |
 | 4 | **Rules** ✅ | flags, capture, win/loss, stock, 1P vs CPU with drones |
-| 5 | **2-player** | split-screen, mines, flag-defence behaviours |
+| 5 | **2-player** ✅ | split-screen, mines, flag-defence behaviours |
 | 6 | **UI/Audio** | bunker, map, radar, HUD, beacon, SFX, skull, victory |
 | 7 | **Content** | level editor + validator, all 72 maps built and playtested (§10.2) |
 | 8 | **Art pass** | all recreated models and textures, silhouette check (§12.2) |

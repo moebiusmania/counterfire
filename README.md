@@ -28,4 +28,6 @@ bun run dev        # http://localhost:3000, add ?players=2 for split-screen
 | Switch: centre turret / change weapon | K | Numpad Enter |
 | Self-destruct | H + J + K | − + Enter |
 
-Dev URLs: `?players=2` for split-screen, `?showcase` for a still line-up of every model, `?seed=N` for a fixed seed.
+Gamepads: the first one plays P1 and the second P2 (stick/d-pad drive, shoulders turret/strafe, A/B/X the three fire keys).
+
+Dev URLs: `?players=2` for a split-screen duel, `?level=<id>` for any level, `?showcase` for a still line-up of every model, `?seed=N` for a fixed seed.

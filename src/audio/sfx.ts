@@ -6,6 +6,7 @@
 
 import { render3D, Sound, type Vector3 } from 'littlejsengine';
 import type { ShotKind } from '../sim/tuning';
+import { type Listener, splitMix } from './mix';
 
 const SOUNDS = {
   // weapons, one per shot kind
@@ -43,9 +44,24 @@ const SOUNDS = {
 
 export type SfxName = keyof typeof SOUNDS;
 
+let listeners: Listener[] = [];
+
+/** Where the players are hearing from; with two, each owns one side of the speakers. */
+export function setListeners(next: Listener[]): void {
+  listeners = next;
+}
+
 /** Play a sound, placed and panned in the 3D scene when given a position. */
 export function playSfx(name: SfxName, pos?: Vector3): void {
   const sound = SOUNDS[name];
-  if (pos) render3D.playSound(sound, pos);
-  else sound.play();
+  if (!pos) {
+    sound.play();
+    return;
+  }
+  if (listeners.length < 2) {
+    render3D.playSound(sound, pos);
+    return;
+  }
+  const mix = splitMix(pos, listeners, render3D.soundDefaultRange);
+  if (mix) sound.play(undefined, mix.volume)?.setPan(mix.pan);
 }
