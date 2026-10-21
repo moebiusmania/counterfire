@@ -38,6 +38,7 @@ import {
   buildTurretParts,
 } from './models';
 import { SEA_LEVEL, TerrainView, toWorld } from './terrain';
+import { THEMES } from './themes';
 
 interface VehicleView {
   root: EngineObject3D;
@@ -81,7 +82,7 @@ export class SceneView {
   private frame = 0;
 
   constructor(private readonly world: World) {
-    this.terrain = new TerrainView(world.terrain);
+    this.terrain = new TerrainView(world.terrain, THEMES[world.level.theme]);
     for (const t of world.structures) this.addStructure(t);
     this.sub = new EngineObject3D(toWorld(0, 0, -3), buildSubmarine());
     this.sub.castShadow = false;

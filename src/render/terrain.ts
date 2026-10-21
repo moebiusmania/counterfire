@@ -3,7 +3,6 @@
 
 import {
   buildGrid,
-  type Color,
   EngineObject3D,
   InstancedMesh3D,
   type Mesh,
@@ -14,25 +13,14 @@ import {
   vec3,
 } from 'littlejsengine';
 import { type Terrain, Tile, type TileChar } from '../sim/terrain';
-import { buildBridgeDeck, buildTree, buildWallBlock } from './models';
+import { buildBridgeDeck, buildWallBlock } from './models';
+import type { Theme } from './themes';
 
 export function toWorld(x: number, y: number, height = 0): Vector3 {
   return vec3(x, height, -y);
 }
 
 export const SEA_LEVEL = -0.1;
-
-const TILE_COLORS: Record<TileChar, Color> = {
-  [Tile.Grass]: rgb(0.34, 0.55, 0.22),
-  [Tile.Road]: rgb(0.47, 0.44, 0.38),
-  [Tile.Sand]: rgb(0.82, 0.75, 0.52),
-  [Tile.Shallow]: rgb(0.66, 0.62, 0.45),
-  [Tile.Deep]: rgb(0.16, 0.26, 0.33),
-  [Tile.Forest]: rgb(0.21, 0.38, 0.15),
-  [Tile.Wall]: rgb(0.5, 0.48, 0.42),
-  [Tile.Bridge]: rgb(0.16, 0.26, 0.33),
-  [Tile.Rubble]: rgb(0.36, 0.31, 0.25),
-};
 
 function tileHeight(tile: TileChar): number {
   switch (tile) {
@@ -57,16 +45,20 @@ export class TerrainView {
   private ground?: EngineObject3D;
   private sets: InstancedMesh3D[] = [];
   private version = -1;
-  private readonly treeMesh = buildTree();
+  private readonly treeMesh: Mesh;
   private readonly wallMesh = buildWallBlock();
   private readonly bridgeMesh = buildBridgeDeck();
 
-  constructor(private readonly terrain: Terrain) {
+  constructor(
+    private readonly terrain: Terrain,
+    private readonly theme: Theme,
+  ) {
+    this.treeMesh = theme.tree();
     const sea = new EngineObject3D(
       toWorld(terrain.w / 2, terrain.h / 2, SEA_LEVEL),
       render3D.planeMesh,
       undefined,
-      rgb(0.15, 0.4, 0.55, 0.78),
+      theme.sea,
     );
     sea.scale3D = vec3(terrain.w * 4, 1, terrain.h * 4);
     sea.transparent = true;
@@ -91,7 +83,7 @@ export class TerrainView {
     const color = (lx: number, lz: number) => {
       const tx = Math.floor(lx + w / 2);
       const ty = Math.floor(h / 2 - lz);
-      const base = TILE_COLORS[t.get(tx, ty)];
+      const base = this.theme.tiles[t.get(tx, ty)];
       const n = 0.94 + cellNoise(tx, ty) * 0.1;
       return rgb(base.r * n, base.g * n, base.b * n);
     };

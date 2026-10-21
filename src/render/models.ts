@@ -50,15 +50,6 @@ export function buildTank(team: Team): TankMeshes {
   return { hull, turret };
 }
 
-/** A conifer for forest tiles. */
-export function buildTree(): Mesh {
-  const tree = new Mesh();
-  tree.combine(buildCylinder(0.14, 0.3, 6), vec3(0, 0.15, 0), rgb(0.35, 0.22, 0.1));
-  tree.combine(buildCone(0.8, 0.9, 7), vec3(0, 0.65, 0), rgb(0.1, 0.35, 0.12));
-  tree.combine(buildCone(0.55, 0.6, 7), vec3(0, 1.0, 0), rgb(0.13, 0.42, 0.15));
-  return tree;
-}
-
 /** Bunker: a low concrete pad with the elevator hatch in team colour. */
 export function buildBunker(team: Team): Mesh {
   const m = new Mesh();
