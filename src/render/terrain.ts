@@ -13,7 +13,7 @@ import {
   vec3,
 } from 'littlejsengine';
 import { type Terrain, Tile, type TileChar } from '../sim/terrain';
-import { buildBridgeDeck, buildWallBlock } from './models';
+import { buildBridgeDeck, buildBridgeRail, buildWallBlock } from './models';
 import type { Theme } from './themes';
 
 export function toWorld(x: number, y: number, height = 0): Vector3 {
@@ -41,6 +41,14 @@ function cellNoise(x: number, y: number, salt = 0): number {
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
 
+/** Neighbour offsets and the yaw that turns a rail's -Z edge toward each: north, east, south, west. */
+const RAIL_SIDES = [
+  [0, 1, 0],
+  [1, 0, -Math.PI / 2],
+  [0, -1, Math.PI],
+  [-1, 0, Math.PI / 2],
+] as const;
+
 export class TerrainView {
   private ground?: EngineObject3D;
   private sets: InstancedMesh3D[] = [];
@@ -48,6 +56,7 @@ export class TerrainView {
   private readonly treeMesh: Mesh;
   private readonly wallMesh = buildWallBlock();
   private readonly bridgeMesh = buildBridgeDeck();
+  private readonly railMesh = buildBridgeRail();
 
   constructor(
     private readonly terrain: Terrain,
@@ -106,17 +115,24 @@ export class TerrainView {
   private buildProps(): void {
     for (const set of this.sets) set.destroy();
     this.sets = [];
-    const cells: Record<'trees' | 'walls' | 'bridges', [number, number][]> = {
+    const cells: Record<'trees' | 'walls' | 'bridges' | 'rails', [number, number, number][]> = {
       trees: [],
       walls: [],
       bridges: [],
+      rails: [],
     };
     for (let y = 0; y < this.terrain.h; y++) {
       for (let x = 0; x < this.terrain.w; x++) {
         const tile = this.terrain.get(x, y);
-        if (tile === Tile.Forest) cells.trees.push([x, y]);
-        else if (tile === Tile.Wall) cells.walls.push([x, y]);
-        else if (tile === Tile.Bridge) cells.bridges.push([x, y]);
+        if (tile === Tile.Forest) cells.trees.push([x, y, 0]);
+        else if (tile === Tile.Wall) cells.walls.push([x, y, 0]);
+        else if (tile === Tile.Bridge) {
+          cells.bridges.push([x, y, 0]);
+          // a rail along each edge over open water: north, east, south, west
+          RAIL_SIDES.forEach(([dx, dy, yaw]) => {
+            if (this.terrain.get(x + dx, y + dy) === Tile.Deep) cells.rails.push([x, y, yaw]);
+          });
+        }
       }
     }
     this.addSet(this.treeMesh, cells.trees, (x, y) => [
@@ -125,23 +141,23 @@ export class TerrainView {
       vec3(0.85 + cellNoise(x, y, 4) * 0.35),
     ]);
     this.addSet(this.wallMesh, cells.walls, (x, y) => [toWorld(x + 0.5, y + 0.5), vec3(), vec3(1)]);
-    this.addSet(this.bridgeMesh, cells.bridges, (x, y) => {
-      // rails run along the bridge: east-west unless water lies east and west of it
-      const t = this.terrain;
-      const northSouth = t.get(x - 1, y) === Tile.Deep && t.get(x + 1, y) === Tile.Deep;
-      return [toWorld(x + 0.5, y + 0.5), vec3(0, northSouth ? Math.PI / 2 : 0, 0), vec3(1)];
-    });
+    this.addSet(this.bridgeMesh, cells.bridges, (x, y) => [toWorld(x + 0.5, y + 0.5), vec3(), vec3(1)]);
+    this.addSet(this.railMesh, cells.rails, (x, y, yaw) => [
+      toWorld(x + 0.5, y + 0.5),
+      vec3(0, yaw, 0),
+      vec3(1),
+    ]);
   }
 
   private addSet(
     mesh: Mesh,
-    cells: [number, number][],
-    place: (x: number, y: number) => [Vector3, Vector3, Vector3],
+    cells: [number, number, number][],
+    place: (x: number, y: number, yaw: number) => [Vector3, Vector3, Vector3],
   ): void {
     if (!cells.length) return;
     const set = new InstancedMesh3D(mesh, cells.length);
-    cells.forEach(([x, y], i) => {
-      set.setTransformAt(i, ...place(x, y));
+    cells.forEach(([x, y, yaw], i) => {
+      set.setTransformAt(i, ...place(x, y, yaw));
     });
     this.sets.push(set);
   }

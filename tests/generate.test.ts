@@ -2,6 +2,9 @@ import { describe, expect, test } from 'bun:test';
 import { track } from '../src/levels';
 import { connected, generateDuel, generateLevel, tierCounts, tierStock } from '../src/levels/generate';
 import { validateLevel } from '../src/levels/schema';
+import { Tile } from '../src/sim/terrain';
+import { FLAGS, VEHICLES } from '../src/sim/tuning';
+import type { PlayerId } from '../src/sim/types';
 import { World } from '../src/sim/world';
 
 const spec = (tier: number, seed: number) => ({
@@ -99,4 +102,63 @@ describe('shipped set (SPEC §10.2)', () => {
       expect(connected(level, bunker, tower, 'ground')).toBe(true);
     }
   });
+});
+
+/** Where a vehicle of this radius can drive from its bunker, sampled every STEP tiles from the tile corners. */
+function driveArea(world: World, player: PlayerId, radius: number) {
+  const STEP = 0.25;
+  const w = Math.ceil(world.terrain.w / STEP);
+  const h = Math.ceil(world.terrain.h / STEP);
+  const seen = new Uint8Array(w * h);
+  const b = world.player(player).bunker;
+  const start = Math.round(b.x / STEP) + Math.round(b.y / STEP) * w;
+  seen[start] = 1;
+  const queue = [start];
+  for (let i = queue.pop(); i !== undefined; i = queue.pop()) {
+    const x = i % w;
+    const y = (i - x) / w;
+    for (const [nx, ny] of [
+      [x + 1, y],
+      [x - 1, y],
+      [x, y + 1],
+      [x, y - 1],
+    ] as const) {
+      const k = nx + ny * w;
+      if (nx < 0 || ny < 0 || nx >= w || ny >= h || seen[k]) continue;
+      if (!world.fits(nx * STEP, ny * STEP, radius, 'ground')) continue;
+      seen[k] = 1;
+      queue.push(k);
+    }
+  }
+  /** Does the area come within `d` tiles of (px, py)? */
+  return (px: number, py: number, d: number) => {
+    for (let y = Math.max(0, Math.floor((py - d) / STEP)); y <= Math.min(h - 1, (py + d) / STEP); y++)
+      for (let x = Math.max(0, Math.floor((px - d) / STEP)); x <= Math.min(w - 1, (px + d) / STEP); x++)
+        if (seen[x + y * w] && Math.hypot(x * STEP - px, y * STEP - py) <= d) return true;
+    return false;
+  };
+}
+
+describe('on every shipped map with bridges, land vehicles get across', () => {
+  // vehicles are circles: leave them room to steer, not just a line to thread
+  const STEER = { jeep: 0.15, asv: 0.15 };
+  const maps = [...track('training'), ...track('tournament'), ...track('duel')].filter((l) =>
+    l.tiles.some((row) => row.includes(Tile.Bridge)),
+  );
+  for (const level of maps) {
+    test(level.id, () => {
+      const world = new World(structuredClone(level), 1);
+      for (const p of world.players.keys()) {
+        const towers = world.structures.filter((s) => s.type === 'flagTower' && s.team !== p);
+        // the ASV, the widest, gets across to within range of the enemy's towers
+        const asv = driveArea(world, p, VEHICLES.asv.radius + STEER.asv);
+        expect(towers.some((t) => asv(t.x, t.y, 4))).toBe(true);
+        // and once they are rubble, the jeep drives up to every flag
+        for (const t of towers) t.destroyed = true;
+        const jeep = driveArea(world, p, VEHICLES.jeep.radius + STEER.jeep);
+        for (const t of towers) expect(jeep(t.x, t.y, FLAGS.pickupRadius)).toBe(true);
+        for (const t of towers) t.destroyed = false;
+      }
+    });
+  }
 });

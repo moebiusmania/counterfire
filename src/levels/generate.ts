@@ -253,14 +253,53 @@ function path(g: Grid, from: [number, number], to: [number, number], waterCost: 
   return out.reverse();
 }
 
-/** Lay a road along a path; water on it becomes bridge, or stays water when bridges are off. */
+/**
+ * Lay a road along a path. Water on it becomes a bridge three tiles wide, or stays water when bridges
+ * are off. A one-tile bridge, or a staircase of them where the path crosses water on the diagonal,
+ * leaves a tank or an ASV no room to steer; widened, the steps of a staircase fill in as well.
+ */
 function road(g: Grid, cells: [number, number][], bridges: boolean): void {
+  if (bridges) {
+    for (const [c, r] of cells)
+      if (g.get(c, r) === Tile.Deep || g.get(c, r) === Tile.Bridge) widen(g, c, r, Tile.Bridge);
+    // a road squeezed between waters on land gets beach either side
+    for (const [c, r] of cells) if (g.isLand(c, r)) widen(g, c, r, Tile.Sand);
+  }
   for (const [c, r] of cells) {
     const t = g.get(c, r);
-    if (t === Tile.Deep) {
-      if (bridges) g.set(c, r, Tile.Bridge);
-    } else if (t !== Tile.Bridge) g.set(c, r, Tile.Road);
+    if (t !== Tile.Deep && t !== Tile.Bridge) g.set(c, r, Tile.Road);
   }
+}
+
+/** Turn the deep water round a cell into `t`. */
+function widen(g: Grid, c: number, r: number, t: TileChar): void {
+  for (let dr = -1; dr <= 1; dr++)
+    for (let dc = -1; dc <= 1; dc++) if (g.get(c + dc, r + dr) === Tile.Deep) g.set(c + dc, r + dr, t);
+}
+
+/** The cells a land vehicle can drive to from `from`, over the grid's terrain. */
+function landReach(g: Grid, from: [number, number]): Set<number> {
+  const seen = new Set<number>([from[1] * g.w + from[0]]);
+  const queue = [from];
+  for (let next = queue.pop(); next; next = queue.pop()) {
+    for (const [dc, dr] of NEIGHBOURS) {
+      const c = next[0] + dc;
+      const r = next[1] + dr;
+      const k = r * g.w + c;
+      if (!g.inside(c, r) || seen.has(k) || !passable(g.get(c, r), 'ground')) continue;
+      seen.add(k);
+      queue.push([c, r]);
+    }
+  }
+  return seen;
+}
+
+/** Cells within a step of a route, kept clear of forest and structures so a tank always has room. */
+function routeMargin(g: Grid, routes: [number, number][][]): Set<number> {
+  const out = new Set<number>();
+  for (const [c, r] of routes.flat())
+    for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) out.add((r + dr) * g.w + c + dc);
+  return out;
 }
 
 function forests(g: Grid, rng: Rng, count: number, keepClear: (c: number, r: number) => boolean): void {
@@ -315,6 +354,8 @@ interface Compound {
   /** The cell just outside the gate. */
   gate: [number, number];
   interior: [number, number][];
+  /** The cells just inside the gate, kept clear so nothing blocks the way in. */
+  entry: [number, number][];
 }
 
 /** A walled compound with a gate in the south wall (SPEC §10.3 rule 3). */
@@ -324,12 +365,15 @@ function compound(g: Grid, c: number, r: number, w: number, h: number): Compound
   g.rect(c0 - 1, r0 - 1, c0 + w, r0 + h, Tile.Grass);
   g.rect(c0, r0, c0 + w - 1, r0 + h - 1, Tile.Wall);
   g.rect(c0 + 1, r0 + 1, c0 + w - 2, r0 + h - 2, Tile.Grass);
+  // a gate three tiles wide, so a tank can drive in as well as a jeep
   const gateC = c0 + Math.floor(w / 2);
-  g.set(gateC, r0 + h - 1, Tile.Road);
+  for (let dc = -1; dc <= 1; dc++) g.set(gateC + dc, r0 + h - 1, Tile.Road);
   const interior: [number, number][] = [];
+  const entry: [number, number][] = [];
   for (let rr = r0 + 1; rr <= r0 + h - 2; rr++)
-    for (let cc = c0 + 1; cc <= c0 + w - 2; cc++) interior.push([cc, rr]);
-  return { gate: [gateC, r0 + h], interior };
+    for (let cc = c0 + 1; cc <= c0 + w - 2; cc++)
+      (rr === r0 + h - 2 && Math.abs(cc - gateC) <= 1 ? entry : interior).push([cc, rr]);
+  return { gate: [gateC, r0 + h], interior, entry };
 }
 
 function cellsWhere(g: Grid, test: (c: number, r: number) => boolean): [number, number][] {
@@ -423,7 +467,7 @@ function buildOnePlayer(spec: GenSpec, seed: number): Level {
   for (const route of routes) road(g, route, bridges);
   beaches(g);
 
-  const onRoute = new Set(routes.flat().map(([c, r]) => r * w + c));
+  const onRoute = routeMargin(g, routes);
   forests(
     g,
     rng,
@@ -435,7 +479,9 @@ function buildOnePlayer(spec: GenSpec, seed: number): Level {
   );
 
   const place = new Placer(g, rng);
-  for (const [c, r] of routes.flat()) place.reserve(c, r);
+  // structures are solid: one beside the road, with water or another across it, would close the way
+  for (const k of onRoute) place.reserve(k % w, Math.floor(k / w));
+  for (const [c, r] of compounds.flatMap((cp) => cp.entry)) place.reserve(c, r);
   for (let dr = -1; dr <= 1; dr++)
     for (let dc = -1; dc <= 1; dc++) place.reserve(bunker[0] + dc, bunker[1] + dr);
   place.place(bunker[0], bunker[1], { id: 'p1-bunker', type: 'bunker', team: 'P1', rot: 0 });
@@ -443,8 +489,9 @@ function buildOnePlayer(spec: GenSpec, seed: number): Level {
   placeDepots(g, place, routes[0] ?? [], bunker, counts.depots, 'P1');
   placeTargets(g, place, bunker, spec.targets ?? 0);
 
-  // flag towers: most inside the compounds, the rest out in the north
+  // flag towers: most inside the compounds, the rest out in the north where a land vehicle can get
   const towerIds: string[] = [];
+  const drivable = landReach(g, bunker);
   const inside = compounds.flatMap((cp) => cp.interior);
   for (let i = 0; i < counts.towers; i++) {
     const id = `cpu-tower-${i + 1}`;
@@ -452,7 +499,7 @@ function buildOnePlayer(spec: GenSpec, seed: number): Level {
       i < Math.ceil(counts.towers * 0.7)
         ? place.placeAny(inside, { id, type: 'flagTower', team: 'CPU' })
         : place.placeAny(
-            cellsWhere(g, (c, r) => r < h * 0.5 && near([c, r], bunker) > h * 0.4),
+            cellsWhere(g, (c, r) => r < h * 0.5 && near([c, r], bunker) > h * 0.4 && drivable.has(r * w + c)),
             { id, type: 'flagTower', team: 'CPU' },
           );
     if (spot) towerIds.push(id);
@@ -519,8 +566,9 @@ function placeDepots(
   count: number,
   team: Team,
 ): void {
+  // by the road, a tile clear of it, as the cells next to the road are kept open
   const beside = route.flatMap(([c, r]) =>
-    NEIGHBOURS.map(([dc, dr]) => [c + dc, r + dr] as [number, number]),
+    NEIGHBOURS.map(([dc, dr]) => [c + 2 * dc, r + 2 * dr] as [number, number]),
   );
   for (let i = 0; i < count; i++) {
     const type: EntityType = i % 2 === 0 ? 'fuelDepot' : 'ammoTent';
@@ -593,7 +641,8 @@ function buildDuel(spec: GenSpec, seed: number): Level {
 
   const bunker = findSite(g, rng, [hh - 7, hh - 5], 2, w / 2 + rng.range(-w / 6, w / 6));
   g.rect(bunker[0] - 2, bunker[1] - 2, bunker[0] + 2, bunker[1] + 2, Tile.Grass);
-  const site = findSite(g, rng, [channel + 4, hh - 8], 5, bunker[0] < w / 2 ? w * 0.7 : w * 0.3);
+  // the compound's south wall stays a row clear of the bunker's apron, so vehicles come up with room
+  const site = findSite(g, rng, [channel + 4, hh - 11], 5, bunker[0] < w / 2 ? w * 0.7 : w * 0.3);
   const cp = compound(g, site[0], site[1], 9, 5);
 
   // bridges cross the channel in mirrored pairs, so each span joins up with the north half
@@ -603,13 +652,13 @@ function buildDuel(spec: GenSpec, seed: number): Level {
     [w - 1 - bridgeC, channel],
   ];
   for (const [c] of heads) {
-    for (let r = 0; r < channel; r++) g.set(c, r, Tile.Bridge);
-    g.set(c, channel, Tile.Grass);
+    g.rect(c - 1, 0, c + 1, channel - 1, Tile.Bridge);
+    g.rect(c - 1, channel, c + 1, channel, Tile.Grass);
   }
   const routes = [...heads.map((hd) => path(g, bunker, hd, 30)), path(g, bunker, cp.gate, 30)];
   for (const route of routes) road(g, route, true);
   beaches(g);
-  const onRoute = new Set(routes.flat().map(([c, r]) => r * w + c));
+  const onRoute = routeMargin(g, routes);
   forests(
     g,
     rng,
@@ -622,19 +671,24 @@ function buildDuel(spec: GenSpec, seed: number): Level {
   for (let r = 0; r < hh; r++) for (let c = 0; c < w; c++) full.set(c, hh + r, g.get(c, r));
   const place = new Placer(full, rng);
   const at = (p: [number, number]): [number, number] => [p[0], p[1] + hh];
-  for (const [c, r] of routes.flat()) place.reserve(c, r + hh);
+  for (const k of onRoute) place.reserve(k % w, Math.floor(k / w) + hh);
+  for (const [c, r] of cp.entry) place.reserve(c, r + hh);
   place.place(...at(bunker), { id: 'p1-bunker', type: 'bunker', team: 'P1', rot: 0 });
   placeDepots(full, place, (routes[2] ?? []).map(at), at(bunker), counts.depots, 'P1');
 
   const towers: string[] = [];
   const total = Math.max(3, Math.min(6, counts.towers));
+  const drivable = landReach(full, at(bunker));
   for (let i = 0; i < total; i++) {
     const id = `p1-tower-${i + 1}`;
     const spot =
       i < 2
         ? place.placeAny(cp.interior.map(at), { id, type: 'flagTower', team: 'P1' })
         : place.placeAny(
-            cellsWhere(full, (c, r) => r > hh + channel + 1 && near([c, r], at(bunker)) > 6),
+            cellsWhere(
+              full,
+              (c, r) => r > hh + channel + 1 && near([c, r], at(bunker)) > 6 && drivable.has(r * w + c),
+            ),
             { id, type: 'flagTower', team: 'P1' },
           );
     if (spot) towers.push(id);

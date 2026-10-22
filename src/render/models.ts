@@ -184,16 +184,21 @@ export function buildWallBlock(): Mesh {
   return m;
 }
 
+/** One tile of bridge deck; bridges are several tiles wide, so the rails are separate. */
 export function buildBridgeDeck(): Mesh {
   const m = new Mesh();
   m.combine(buildBox(vec3(1, 0.1, 1)), vec3(0, 0.02, 0), rgb(0.45, 0.33, 0.2));
   // plank seams across the deck
   for (let i = 0; i < 4; i++)
     m.combine(buildBox(vec3(0.015, 0.01, 0.88)), vec3(-0.375 + i * 0.25, 0.075, 0), rgb(0.3, 0.22, 0.13));
-  for (const side of [-1, 1]) {
-    m.combine(buildBox(vec3(1, 0.12, 0.06)), vec3(0, 0.12, side * 0.47), DARK);
-    m.combine(buildBox(vec3(0.06, 0.2, 0.08)), vec3(0, 0.15, side * 0.47), STEEL); // rail post
-  }
+  return m;
+}
+
+/** A tile's length of rail along the deck's -Z edge, turned to face whichever side has water. */
+export function buildBridgeRail(): Mesh {
+  const m = new Mesh();
+  m.combine(buildBox(vec3(1, 0.12, 0.06)), vec3(0, 0.12, -0.47), DARK);
+  m.combine(buildBox(vec3(0.06, 0.2, 0.08)), vec3(0, 0.15, -0.47), STEEL); // rail post
   return m;
 }
 
