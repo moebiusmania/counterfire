@@ -478,7 +478,7 @@ v1 has no music. The game emits the events a future music layer will need: `vehi
 | Self-destruct | H+J+K | −, +, Enter |
 | Quit / Pause / Fullscreen | Esc / F3 / Alt+Enter | |
 
-Players can rebind keys, and bindings persist in `localStorage`.
+Players can rebind keys on the title menu's **Controls** screen: pick an action and a player, then press the new key. A key that is already in use, by either player, swaps places with the old one, so no action is ever left without a key. Esc, F3 and Alt can't be bound. Reset to defaults restores this table. Bindings persist in `localStorage`.
 
 ### 13.2 Gamepads
 Gamepad 0 plays as P1 and gamepad 1 as P2, alongside the keyboard. The left stick or d-pad drives, the shoulder buttons and triggers turn the turret or bank, A is Ground Fire, B is Air Fire and X is Switch. LittleJS's on-screen gamepad is an optional touch layout. **[VERIFY]** the stick's up direction on real hardware; the mapping is unit-tested only.
@@ -499,6 +499,17 @@ For each item in §6 to §11, record a side-by-side clip of the original and the
 ### 14.3 Performance
 60 fps for the 2-player split-screen on the largest level on the reference laptop. Initial load under 10 MB gzipped.
 
+`bun run perf [level]` measures it: it builds the game, plays the level in Chromium on the real GPU with both players driving and firing, and prints fps, frame-time percentiles and main-thread load. It defaults to `duel-10`, the largest two-player map (50×40).
+
+**Measured 2026-10-22** on a desktop with an RTX 5060, at 1920×1080 with no frame cap:
+
+| Level | fps | Main thread busy | Script per frame |
+|---|---|---|---|
+| `duel-10`, split-screen | ~104 | 13% | 1.0 ms |
+| `t9-2`, the largest level (61×54), one player | ~103 | 15% | 1.0 ms |
+
+No frame took over 33 ms in a steady run. The production build is about 190 KB gzipped. **[VERIFY]** on the reference laptop.
+
 ---
 
 ## 15. Milestones
@@ -514,7 +525,7 @@ For each item in §6 to §11, record a side-by-side clip of the original and the
 | 6 | **UI/Audio** ✅ | bunker, map, radar, HUD, beacon, SFX, skull, victory |
 | 7 | **Content** ✅ | level editor + validator, all 72 maps built (§10.2). Automated checks done; human playtesting still to do. |
 | 8 | **Art pass** ✅ | models refined in code (§12.4), silhouette check (§12.2) |
-| 9 | **Polish/Release** | performance targets, rebinding, gamepads, "Counterfire" trademark and domain cleared |
+| 9 | **Polish/Release** | performance targets (measured, §14.3; reference laptop still to do), rebinding ✅, gamepads (built; real hardware still to test, §13.2), "Counterfire" trademark and domain cleared (owner's task) |
 
 ---
 

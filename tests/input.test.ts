@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { splitMix } from '../src/audio/mix';
+import { DEFAULT_BINDINGS, rebind } from '../src/input/bindings';
 import { mergeInputs, PAD, padToInput } from '../src/input/gamepad';
 import { input } from '../src/sim/types';
 
@@ -52,4 +53,18 @@ describe('split-screen sound', () => {
     expect(near?.volume).toBeLessThan(1);
     expect(splitMix({ x: 25, y: 0, z: 40 }, listeners, 30)).toBeUndefined();
   });
+});
+
+test('rebinding a key in use swaps it with the old key, across both players', () => {
+  const b = rebind(DEFAULT_BINDINGS, 'P1', 'forward', 'KeyS');
+  expect(b.P1.forward).toEqual(['KeyS']);
+  expect(b.P1.back).toEqual(['KeyW']);
+  const c = rebind(b, 'P2', 'switch', 'KeyH');
+  expect(c.P2.switch).toEqual(['KeyH']);
+  expect(c.P1.fireGround).toEqual(['NumpadEnter']);
+  expect(DEFAULT_BINDINGS.P1.forward).toEqual(['KeyW']); // the defaults stay untouched
+});
+
+test('reserved keys can not be bound', () => {
+  expect(rebind(DEFAULT_BINDINGS, 'P1', 'forward', 'Escape')).toBe(DEFAULT_BINDINGS);
 });

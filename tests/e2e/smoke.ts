@@ -85,6 +85,12 @@ const scenarios: { name: string; query: string; steps: Step[] }[] = [
     query: '',
     steps: [{ wait: 1200 }, { press: ['KeyH', 'KeyH'], wait: 1500 }, { press: ['KeyH'], wait: 1500 }],
   },
+  // up wraps round to Controls; then bind P1's Forward to Y
+  {
+    name: 'controls',
+    query: '',
+    steps: [{ wait: 1200 }, { press: ['KeyW', 'KeyH', 'KeyH', 'KeyY'], wait: 800 }],
+  },
   { name: 'showcase', query: '?showcase', steps: [{ wait: 1500 }] },
   { name: 'silhouette', query: '?showcase&silhouette', steps: [{ wait: 1500 }] },
   { name: 'map', query: '?players=2', steps: [{ wait: 1200 }, { press: ['KeyJ'], wait: 600 }] },

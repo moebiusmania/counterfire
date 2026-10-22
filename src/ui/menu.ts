@@ -1,21 +1,31 @@
 // The title menu and level lists (SPEC §5.1): pick Training, Tournament or Two Players, then a
-// map. Locked tournament maps open as the one before is won.
+// map. Locked tournament maps open as the one before is won. Controls rebinds keys (SPEC §13.1).
 
 import { isUnlocked, type Progress, type Track, trackIds } from '../game/progress';
+import { ACTIONS, type Bindings } from '../input/bindings';
 import { getLevel, LEVELS } from '../levels';
 import type { Level } from '../levels/schema';
+import type { PlayerId } from '../sim/types';
+import { keyLabel } from './hud';
 import { HUD, MAP_TILE_CSS } from './palette';
 
 export type MenuAction = 'up' | 'down' | 'left' | 'right' | 'select' | 'back';
 
 export interface MenuState {
-  screen: 'title' | 'levels';
-  /** Highlighted title item, an index into TRACKS. */
+  screen: 'title' | 'levels' | 'controls';
+  /** Highlighted title item, an index into TRACKS, or TRACKS.length for Controls. */
   item: number;
   track: Track;
   /** Highlighted map in the track's list. */
   level: number;
+  /** Controls screen: the highlighted action (ACTIONS.length is Reset) and player column. */
+  row: number;
+  col: number;
+  /** Controls screen: waiting for the key to bind to the highlighted action. */
+  capturing: boolean;
 }
+
+export const CONTROL_PLAYERS: PlayerId[] = ['P1', 'P2'];
 
 export const TRACKS: { track: Track; label: string; blurb: string }[] = [
   { track: 'training', label: 'TRAINING', blurb: 'Six lessons, one for each skill' },
@@ -24,7 +34,7 @@ export const TRACKS: { track: Track; label: string; blurb: string }[] = [
 ];
 
 export function initialMenu(): MenuState {
-  return { screen: 'title', item: 0, track: 'training', level: 0 };
+  return { screen: 'title', item: 0, track: 'training', level: 0, row: 0, col: 0, capturing: false };
 }
 
 /** The level a menu state points at. */
@@ -32,16 +42,21 @@ export function selectedLevel(m: MenuState): string | undefined {
   return trackIds(m.track)[m.level];
 }
 
-/** Apply one menu action; `start` is set when a map is chosen to play. */
+/**
+ * Apply one menu action; `start` is set when a map is chosen to play, `reset` when the controls
+ * should go back to the defaults.
+ */
 export function menuInput(
   m: MenuState,
   action: MenuAction,
   progress: Progress,
-): { menu: MenuState; start?: string } {
+): { menu: MenuState; start?: string; reset?: boolean } {
   if (m.screen === 'title') {
-    const n = TRACKS.length;
+    const n = TRACKS.length + 1;
     if (action === 'up') return { menu: { ...m, item: (m.item + n - 1) % n } };
     if (action === 'down') return { menu: { ...m, item: (m.item + 1) % n } };
+    if (action === 'select' && m.item === TRACKS.length)
+      return { menu: { ...m, screen: 'controls', row: 0, col: 0, capturing: false } };
     if (action === 'select') {
       const track = TRACKS[m.item]?.track ?? 'training';
       // open the list on the first map not yet won, so "continue" is one press away
@@ -51,6 +66,7 @@ export function menuInput(
     }
     return { menu: m };
   }
+  if (m.screen === 'controls') return controlsInput(m, action);
   const ids = trackIds(m.track);
   const step =
     action === 'up' ? -1 : action === 'down' ? 1 : action === 'left' ? -6 : action === 'right' ? 6 : 0;
@@ -63,9 +79,27 @@ export function menuInput(
   return { menu: m };
 }
 
+function controlsInput(m: MenuState, action: MenuAction): { menu: MenuState; reset?: boolean } {
+  const rows = ACTIONS.length + 1;
+  if (action === 'up') return { menu: { ...m, row: (m.row + rows - 1) % rows } };
+  if (action === 'down') return { menu: { ...m, row: (m.row + 1) % rows } };
+  if (action === 'left' || action === 'right') return { menu: { ...m, col: action === 'left' ? 0 : 1 } };
+  if (action === 'back') return { menu: { ...m, screen: 'title' } };
+  if (action === 'select' && m.row === ACTIONS.length) return { menu: m, reset: true };
+  if (action === 'select') return { menu: { ...m, capturing: true } };
+  return { menu: m };
+}
+
 type Ctx = CanvasRenderingContext2D;
 
-export function drawMenu(ctx: Ctx, m: MenuState, progress: Progress, w: number, h: number): void {
+export function drawMenu(
+  ctx: Ctx,
+  m: MenuState,
+  progress: Progress,
+  bindings: Record<PlayerId, Bindings>,
+  w: number,
+  h: number,
+): void {
   ctx.save();
   ctx.fillStyle = 'rgba(8, 12, 10, .55)';
   ctx.fillRect(0, 0, w, h);
@@ -78,12 +112,13 @@ export function drawMenu(ctx: Ctx, m: MenuState, progress: Progress, w: number, 
   ctx.fillStyle = '#e8d23a';
   ctx.fillText('COUNTERFIRE', w / 2, h * 0.14);
   if (m.screen === 'title') drawTitle(ctx, m, w, h);
+  else if (m.screen === 'controls') drawControls(ctx, m, bindings, w, h);
   else drawLevels(ctx, m, progress, w, h);
   ctx.restore();
 }
 
 function drawTitle(ctx: Ctx, m: MenuState, w: number, h: number): void {
-  TRACKS.forEach((t, i) => {
+  [...TRACKS, { label: 'CONTROLS', blurb: 'Change the keys for each player' }].forEach((t, i) => {
     const y = h * 0.42 + i * 64;
     const on = i === m.item;
     ctx.fillStyle = on ? 'rgba(74, 90, 42, .9)' : 'rgba(20, 24, 16, .8)';
@@ -100,7 +135,57 @@ function drawTitle(ctx: Ctx, m: MenuState, w: number, h: number): void {
   });
   ctx.font = '14px monospace';
   ctx.fillStyle = HUD.dim;
-  ctx.fillText('W/S or arrows choose   H or Enter select', w / 2, h * 0.42 + TRACKS.length * 64 + 20);
+  ctx.fillText('W/S or arrows choose   H or Enter select', w / 2, h * 0.42 + (TRACKS.length + 1) * 64 + 20);
+}
+
+function drawControls(
+  ctx: Ctx,
+  m: MenuState,
+  bindings: Record<PlayerId, Bindings>,
+  w: number,
+  h: number,
+): void {
+  ctx.font = 'bold 20px monospace';
+  ctx.fillStyle = HUD.text;
+  ctx.fillText('CONTROLS', w / 2, h * 0.24);
+  const rowH = Math.min(30, (h * 0.56) / (ACTIONS.length + 2));
+  const top = h * 0.3;
+  const colX = [w / 2 + 40, w / 2 + 200];
+  ctx.font = 'bold 14px monospace';
+  ctx.fillStyle = HUD.dim;
+  CONTROL_PLAYERS.forEach((p, c) => {
+    ctx.fillText(p === 'P1' ? 'PLAYER 1' : 'PLAYER 2', colX[c] ?? 0, top);
+  });
+  ACTIONS.forEach(({ action, label }, r) => {
+    const y = top + (r + 1) * rowH;
+    ctx.textAlign = 'right';
+    ctx.fillStyle = r === m.row ? '#fff' : HUD.text;
+    ctx.fillText(label, w / 2 - 50, y);
+    ctx.textAlign = 'center';
+    CONTROL_PLAYERS.forEach((p, c) => {
+      const x = colX[c] ?? 0;
+      const on = r === m.row && c === m.col;
+      if (on) {
+        ctx.fillStyle = m.capturing ? 'rgba(160, 120, 20, .9)' : 'rgba(74, 90, 42, .9)';
+        ctx.fillRect(x - 70, y - rowH / 2 + 2, 140, rowH - 4);
+      }
+      ctx.fillStyle = on ? '#fff' : HUD.text;
+      ctx.fillText(on && m.capturing ? 'PRESS A KEY' : keyLabel(bindings[p][action][0]), x, y);
+    });
+  });
+  const resetY = top + (ACTIONS.length + 1.5) * rowH;
+  if (m.row === ACTIONS.length) {
+    ctx.fillStyle = 'rgba(74, 90, 42, .9)';
+    ctx.fillRect(w / 2 - 110, resetY - rowH / 2 + 2, 220, rowH - 4);
+  }
+  ctx.fillStyle = m.row === ACTIONS.length ? '#fff' : HUD.text;
+  ctx.fillText('RESET TO DEFAULTS', w / 2, resetY);
+  ctx.font = '14px monospace';
+  ctx.fillStyle = HUD.dim;
+  const hint = m.capturing
+    ? 'Press the new key   Esc cancel'
+    : 'W/S choose   A/D player   H or Enter change   Esc back';
+  ctx.fillText(hint, w / 2, h * 0.92);
 }
 
 function drawLevels(ctx: Ctx, m: MenuState, progress: Progress, w: number, h: number): void {

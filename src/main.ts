@@ -27,7 +27,15 @@ import { playSfx, setListeners } from './audio/sfx';
 import { CUSTOM_KEY } from './editor/custom';
 import { loadProgress, nextLevel, type Progress, recordWin, saveProgress, trackOf } from './game/progress';
 import { addShowcaseStructures, parkShowcase } from './game/showcase';
-import { type Bindings, loadBindings, readInput } from './input/bindings';
+import {
+  ACTIONS,
+  type Bindings,
+  DEFAULT_BINDINGS,
+  loadBindings,
+  readInput,
+  rebind,
+  saveBindings,
+} from './input/bindings';
 import { mergeInputs, readGamepad } from './input/gamepad';
 import { defaultLevelId, getLevel } from './levels';
 import type { Level } from './levels/schema';
@@ -40,7 +48,15 @@ import { GAME_OVER_TICKS } from './sim/tuning';
 import type { InputFrame, PlayerId } from './sim/types';
 import { World } from './sim/world';
 import { clearBanners, drawHud, updateBanners } from './ui/hud';
-import { drawMenu, initialMenu, type MenuAction, type MenuState, menuInput, selectedLevel } from './ui/menu';
+import {
+  CONTROL_PLAYERS,
+  drawMenu,
+  initialMenu,
+  type MenuAction,
+  type MenuState,
+  menuInput,
+  selectedLevel,
+} from './ui/menu';
 
 const params = new URLSearchParams(location.search);
 const showcase = params.has('showcase');
@@ -154,12 +170,36 @@ function menuAction(): MenuAction | undefined {
   return undefined;
 }
 
+/** The last key pressed, for the controls screen to bind; held-key repeats don't count. */
+let pressedKey: string | undefined;
+document.addEventListener('keydown', (e) => {
+  if (!e.repeat) pressedKey = e.code;
+});
+
 function updateMenu() {
+  const key = pressedKey;
+  pressedKey = undefined;
+  if (menu.capturing) {
+    if (!key) return;
+    const action = ACTIONS[menu.row]?.action;
+    const player = CONTROL_PLAYERS[menu.col];
+    if (key !== 'Escape' && action && player) {
+      bindings = rebind(bindings, player, action, key);
+      saveBindings(bindings);
+    }
+    menu = { ...menu, capturing: false };
+    playSfx('select');
+    return;
+  }
   const action = menuAction();
   if (!action) return;
   const before = selectedLevel(menu);
-  const { menu: next, start } = menuInput(menu, action, progress);
+  const { menu: next, start, reset } = menuInput(menu, action, progress);
   menu = next;
+  if (reset) {
+    bindings = structuredClone(DEFAULT_BINDINGS);
+    saveBindings(bindings);
+  }
   playSfx(start ? 'elevator' : 'select');
   if (start) play(start);
   else if (menu.screen === 'levels' && selectedLevel(menu) !== before)
@@ -309,7 +349,7 @@ function gameRender() {
 function gameRenderPost() {
   if (showcase) return;
   if (inMenu) {
-    drawMenu(mainContext, menu, progress, mainCanvasSize.x, mainCanvasSize.y);
+    drawMenu(mainContext, menu, progress, bindings, mainCanvasSize.x, mainCanvasSize.y);
     return;
   }
   drawHud(world, bindings, mapOpen, endHint());

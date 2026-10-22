@@ -32,6 +32,42 @@ export const DEFAULT_BINDINGS: Record<PlayerId, Bindings> = {
   },
 };
 
+/** Every action, in the order the controls screen lists them, with its name there. */
+export const ACTIONS: { action: Action; label: string }[] = [
+  { action: 'forward', label: 'FORWARD' },
+  { action: 'back', label: 'BACK' },
+  { action: 'left', label: 'TURN LEFT' },
+  { action: 'right', label: 'TURN RIGHT' },
+  { action: 'auxLeft', label: 'TURRET / BANK LEFT' },
+  { action: 'auxRight', label: 'TURRET / BANK RIGHT' },
+  { action: 'fireGround', label: 'GROUND FIRE' },
+  { action: 'fireAir', label: 'AIR FIRE' },
+  { action: 'switch', label: 'SWITCH' },
+];
+
+/** Keys the game keeps for itself: quit, pause, and the Alt of Alt+Enter. */
+export const RESERVED_KEYS = new Set(['Escape', 'F3', 'AltLeft', 'AltRight']);
+
+/**
+ * Bind one key to a player's action. Whatever already used that key, for either player, takes the
+ * action's old key in exchange, so no action is ever left without a key.
+ */
+export function rebind(
+  bindings: Record<PlayerId, Bindings>,
+  player: PlayerId,
+  action: Action,
+  code: string,
+): Record<PlayerId, Bindings> {
+  if (RESERVED_KEYS.has(code)) return bindings;
+  const old = bindings[player][action][0];
+  const out = structuredClone(bindings);
+  for (const p of Object.keys(out) as PlayerId[])
+    for (const a of Object.keys(out[p]) as Action[])
+      out[p][a] = out[p][a].map((c) => (c === code && old ? old : c)).filter((c) => c !== code);
+  out[player][action] = [code];
+  return out;
+}
+
 const STORAGE_KEY = 'counterfire.bindings';
 
 /** Saved bindings, falling back to the defaults; storage can be unavailable (private windows). */

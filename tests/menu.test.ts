@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 import { emptyProgress, recordWin, trackIds } from '../src/game/progress';
-import { initialMenu, menuInput, selectedLevel } from '../src/ui/menu';
+import { ACTIONS } from '../src/input/bindings';
+import { initialMenu, menuInput, selectedLevel, TRACKS } from '../src/ui/menu';
 
 test('title: choose a track and open its list', () => {
   let m = initialMenu();
@@ -30,5 +31,18 @@ test('paging and going back', () => {
   expect(menuInput(m, 'left', emptyProgress()).menu.level).toBe(0);
   const last = trackIds('tournament').length - 1;
   expect(menuInput({ ...m, level: last }, 'down', emptyProgress()).menu.level).toBe(last);
+  expect(menuInput(m, 'back', emptyProgress()).menu.screen).toBe('title');
+});
+
+test('controls: open from the title, move, start capturing, reset and go back', () => {
+  let m = { ...initialMenu(), item: TRACKS.length };
+  m = menuInput(m, 'select', emptyProgress()).menu;
+  expect(m.screen).toBe('controls');
+  m = menuInput(menuInput(m, 'down', emptyProgress()).menu, 'right', emptyProgress()).menu;
+  expect([m.row, m.col]).toEqual([1, 1]);
+  expect(menuInput(m, 'select', emptyProgress()).menu.capturing).toBe(true);
+  expect(menuInput(m, 'up', emptyProgress()).menu.row).toBe(0);
+  const reset = menuInput({ ...m, row: ACTIONS.length }, 'select', emptyProgress());
+  expect(reset.reset).toBe(true);
   expect(menuInput(m, 'back', emptyProgress()).menu.screen).toBe('title');
 });

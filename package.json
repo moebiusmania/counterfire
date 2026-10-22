@@ -8,7 +8,8 @@
     "test": "bun test",
     "typecheck": "bun check",
     "lint": "biome check src tests scripts tools",
-    "e2e": "bun tests/e2e/smoke.ts"
+    "e2e": "bun tests/e2e/smoke.ts",
+    "perf": "bun scripts/perf.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.6.2",
