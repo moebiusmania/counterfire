@@ -5,8 +5,10 @@
 // `&silhouette`, in black from the gameplay camera), `?seed=N` fixes the seed, and `?test` hands the
 // live world to the browser smoke test.
 // In play: Esc goes back to the menu, F3 pauses, Alt+Enter toggles full screen (SPEC §9.7).
+// Shift+Esc opens the engine's debug overlay.
 
 import {
+  debugOverlay,
   engineInit,
   engineObjectsDestroy,
   keyIsDown,
@@ -18,6 +20,9 @@ import {
   render3D,
   rgb,
   setCanvasClearColor,
+  setDebugKey,
+  setDebugOverlay,
+  setDebugWatermark,
   setInputWASDEmulateDirection,
   setPaused,
   setShowSplashScreen,
@@ -39,6 +44,7 @@ import {
 import { mergeInputs, readGamepad } from './input/gamepad';
 import { defaultLevelId, getLevel } from './levels';
 import type { Level } from './levels/schema';
+import { Hangars } from './render/hangar';
 import { SceneView } from './render/scene';
 import { toWorld } from './render/terrain';
 import { THEMES } from './render/themes';
@@ -69,6 +75,7 @@ const fixedSeed = params.has('seed') ? Number(params.get('seed')) : undefined;
 
 let world: World;
 let scene: SceneView;
+let hangars: Hangars;
 let split: SplitScreen;
 let bindings: Record<PlayerId, Bindings>;
 let players: PlayerId[];
@@ -82,6 +89,8 @@ const beacons = new Map<PlayerId, BeaconLight>();
 /** Players looking at the map in their bunker (SPEC §9.3), and last tick's Air Fire for each. */
 const mapOpen = new Set<PlayerId>();
 const lastAir = new Map<PlayerId, boolean>();
+/** Players whose camera is in their hangar (SPEC §9.2), to snap it back to the field on the way out. */
+const indoors = new Set<PlayerId>();
 
 function newSeed(): number {
   return fixedSeed ?? Math.floor(Math.random() * 1e9);
@@ -95,12 +104,19 @@ function vehiclePos(player: PlayerId) {
 
 function gameInit() {
   setShowSplashScreen(false);
+  // the engine's debug overlay opens on Shift+Esc only, see systemKeys; plain Esc is the game's
+  setDebugKey('Unbound'); // a code no keyboard sends
+  setDebugWatermark(false);
   setInputWASDEmulateDirection(false);
   setCanvasClearColor(rgb(0.15, 0.4, 0.55));
 
   split = new SplitScreen(); // before the 3D plugin, see render/views.ts
   new Render3DPlugin();
   split.install();
+  split.onView = (i) => {
+    const p = players[i];
+    hangars.light(!inMenu && !showcase && p && hangars.indoor(p) ? p : undefined);
+  };
   render3D.sunDirection = vec3(-0.4, 1, 0.3);
   render3D.shadowRange = 30;
   render3D.setFog(40, 90);
@@ -126,6 +142,8 @@ function startLevel(id: string, seed: number) {
   render3D.setSky(...theme.sky, 0.55);
   render3D.sunColor = theme.sun;
   scene = new SceneView(world);
+  hangars = new Hangars(world);
+  indoors.clear();
   // the menu shows one view; the game splits the screen for two players
   split.views = (inMenu ? ['P1' as PlayerId] : players).map((p) => new PlayerView(vehiclePos(p)));
   if (params.has('test')) Object.assign(globalThis, { counterfire: { world } });
@@ -166,14 +184,17 @@ function menuAction(): MenuAction | undefined {
   // Alt+Enter is full screen, not a menu choice
   const alt = keyIsDown('AltLeft') || keyIsDown('AltRight');
   if (any([...k.fireGround, 'Space']) || (!alt && keyWasPressed('Enter'))) return 'select';
-  if (any(['Escape', ...k.fireAir])) return 'back';
+  if (any(k.fireAir) || (!shiftEscape && keyWasPressed('Escape'))) return 'back';
   return undefined;
 }
 
 /** The last key pressed, for the controls screen to bind; held-key repeats don't count. */
 let pressedKey: string | undefined;
+/** Shift+Esc opens the debug overlay and is not the game's Esc; the engine's keyIsDown misses Shift. */
+let shiftEscape = false;
 document.addEventListener('keydown', (e) => {
   if (!e.repeat) pressedKey = e.code;
+  if (e.code === 'Escape') shiftEscape = e.shiftKey;
 });
 
 function updateMenu() {
@@ -214,7 +235,7 @@ function gameUpdate() {
     updateMenu();
     return;
   }
-  if (keyWasPressed('Escape') && !directLevel) {
+  if (keyWasPressed('Escape') && !shiftEscape && !directLevel) {
     backToMenu();
     return;
   }
@@ -297,6 +318,7 @@ function chimeBeacons() {
 
 /** System keys work even while paused. */
 function systemKeys() {
+  if (keyWasPressed('Escape') && shiftEscape) setDebugOverlay(!debugOverlay);
   if (keyWasPressed('F3') && !inMenu) setPaused(!paused);
   if (keyWasPressed('Enter') && (keyIsDown('AltLeft') || keyIsDown('AltRight'))) {
     if (document.fullscreenElement) void document.exitFullscreen();
@@ -335,8 +357,16 @@ function gameUpdatePost() {
     }
     return;
   }
+  hangars.sync();
   players.forEach((p, i) => {
-    split.views[i]?.follow(vehiclePos(p));
+    const view = split.views[i];
+    if (!view) return;
+    if (hangars.indoor(p)) {
+      const vp = split.viewport(i);
+      hangars.frameCamera(p, view.camera, vp.w / vp.h);
+      indoors.add(p);
+    } else if (indoors.delete(p)) view.snap(vehiclePos(p));
+    else view.follow(vehiclePos(p));
   });
   // in split-screen each player hears from their own vehicle, on their own side
   setListeners(players.length > 1 ? players.map((p, i) => ({ ...vehiclePos(p), pan: i ? 0.7 : -0.7 })) : []);
@@ -352,7 +382,10 @@ function gameRenderPost() {
     drawMenu(mainContext, menu, progress, bindings, mainCanvasSize.x, mainCanvasSize.y);
     return;
   }
-  drawHud(world, bindings, mapOpen, endHint());
+  drawHud(world, bindings, mapOpen, endHint(), (p, area) => {
+    const view = split.views[players.indexOf(p)];
+    return view ? hangars.captionPoints(p).map((pt) => view.toScreen(pt, area)) : [];
+  });
   if (paused) {
     const ctx = mainContext;
     ctx.save();

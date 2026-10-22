@@ -531,3 +531,144 @@ export function buildDrone(team: Team): Mesh {
   m.combine(buildSphere(0.04, 4, 3), vec3(0.18, 0.05, -0.05), rgb(0.15, 0.9, 0.2));
   return m;
 }
+
+/** The underground garage's layout, in its own frame: bays along X, the cut face toward +Z, floor at 0. */
+export const HANGAR = {
+  /** Distance between bay centres. */
+  bay: 2.4,
+  /** Interior half width and height. */
+  halfWidth: 5.2,
+  height: 3,
+  /** The back wall and the cut face the camera looks through. */
+  back: -1.6,
+  front: 1.6,
+  /** Half width of each elevator shaft, and where its back wall stands. */
+  shaft: 0.9,
+  shaftBack: -1.1,
+};
+
+/** The x of bay `i` of four. */
+export function hangarBayX(i: number): number {
+  return (i - 1.5) * HANGAR.bay;
+}
+
+/** A box spanning [x0, x1] x [y0, y1] x [z0, z1]. */
+function slab(
+  m: Mesh,
+  x0: number,
+  x1: number,
+  y0: number,
+  y1: number,
+  z0: number,
+  z1: number,
+  color: Color,
+): void {
+  m.combine(
+    buildBox(vec3(x1 - x0, y1 - y0, z1 - z0)),
+    vec3((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2),
+    color,
+  );
+}
+
+/**
+ * The bunker's garage seen in cross-section (SPEC §9.2): a concrete room cut open toward the camera,
+ * four bays under four elevator shafts that run up through the earth, the team colour along the back.
+ */
+export function buildHangar(team: Team): Mesh {
+  const m = new Mesh();
+  const { halfWidth: hw, height: h, back, front, shaft, shaftBack } = HANGAR;
+  const t = 0.3; // shell thickness
+  const lining = 0.12;
+  const top = 30;
+  const shell = rgb(0.42, 0.42, 0.4);
+  const inner = rgb(0.34, 0.35, 0.33);
+  const earth = [rgb(0.45, 0.33, 0.2), rgb(0.38, 0.27, 0.17), rgb(0.5, 0.37, 0.23)];
+  const deep = earth[1] as Color;
+  // the shell: floor, back wall, side walls
+  slab(m, -hw - t, hw + t, -t, 0, back - t, front, shell);
+  slab(m, -hw, hw, 0, h, back - t, back, inner);
+  for (const s of [-1, 1]) slab(m, s * hw, s * (hw + t), -t, h + t, back - t, front, shell);
+  // the ceiling: a strip behind the shafts, and pieces between them
+  slab(m, -hw - t, hw + t, h, h + t, back - t, shaftBack, shell);
+  const edges = [
+    -hw - t,
+    ...[0, 1, 2, 3].flatMap((i) => [hangarBayX(i) - shaft, hangarBayX(i) + shaft]),
+    hw + t,
+  ];
+  for (let i = 0; i < edges.length; i += 2) {
+    const x0 = edges[i] as number;
+    const x1 = edges[i + 1] as number;
+    slab(m, x0, x1, h, h + t, shaftBack, front, shell);
+    // earth above, in bands, between the shaft linings
+    const bands = [h + t, 6, 9, top];
+    for (let b = 0; b < 3; b++) {
+      const l = i ? lining : 0;
+      const r = i < edges.length - 2 ? lining : 0;
+      slab(m, x0 + l, x1 - r, bands[b] as number, bands[b + 1] as number, back - 3, front, earth[b] as Color);
+    }
+  }
+  // each shaft: lined in concrete, open at the cut face
+  for (let i = 0; i < 4; i++) {
+    const x = hangarBayX(i);
+    slab(m, x - shaft, x + shaft, h, top, shaftBack - lining, shaftBack, inner);
+    for (const s of [-1, 1])
+      slab(m, x + s * shaft, x + s * (shaft + lining), h + t, top, shaftBack, front, shell);
+    // guide rails up the back of the shaft
+    for (const s of [-1, 1])
+      slab(m, x + s * 0.6 - 0.04, x + s * 0.6 + 0.04, h, top, shaftBack, shaftBack + 0.06, STEEL);
+  }
+  slab(m, -hw - t, hw + t, h + t, top, back - 3, shaftBack - lining, deep);
+  // the earth around the room
+  for (const s of [-1, 1]) slab(m, s * (hw + t), s * 30, -30, h + t, back - 3, front, deep);
+  slab(m, -hw - t, hw + t, -30, -t, back - 3, front, earth[2] as Color);
+  // team colour band, hazard stripes along the foot of the back wall, pipes under the ceiling
+  slab(m, -hw, hw, 2.15, 2.3, back, back + 0.02, TEAM_COLORS[team]);
+  for (let x = -hw + 0.2; x < hw; x += 0.4) slab(m, x, x + 0.2, 0, 0.25, back, back + 0.02, HAZARD);
+  for (const y of [2.6, 2.78])
+    m.combine(
+      buildCylinder(0.1, hw * 2, 8),
+      buildMatrix(vec3(0, y, back + 0.15), vec3(0, 0, Math.PI / 2)),
+      y > 2.7 ? rgb(0.5, 0.15, 0.1) : STEEL,
+    );
+  // pilasters between the bays, with a hazard band at the foot
+  for (let i = 0; i < 5; i++) {
+    const x = (i - 2) * HANGAR.bay;
+    slab(m, x - 0.15, x + 0.15, 0, h, back, back + 0.25, shell);
+    slab(m, x - 0.16, x + 0.16, 0, 0.4, back + 0.2, back + 0.26, HAZARD);
+  }
+  // the spotlight gantry rail along the cut face
+  slab(m, -hw, hw, h - 0.12, h - 0.04, front - 0.2, front - 0.1, DARK);
+  for (const x of [-hw + 0.3, -1.2, 1.2, hw - 0.3])
+    slab(m, x - 0.03, x + 0.03, h - 0.12, h, front - 0.18, front - 0.12, DARK);
+  return m;
+}
+
+/** An elevator platform: a steel deck with hazard edges, standing on the origin. */
+export function buildHangarPlatform(): Mesh {
+  const m = new Mesh();
+  const half = HANGAR.shaft - 0.05;
+  slab(m, -half, half, 0, 0.08, -0.85, 0.85, STEEL);
+  for (const z of [-0.8, 0.8])
+    for (let x = -half; x < half - 0.1; x += 0.3)
+      slab(m, x, x + 0.15, 0.08, 0.09, z - 0.05, z + 0.05, HAZARD);
+  for (let i = -2; i <= 2; i++) slab(m, i * 0.3 - 0.01, i * 0.3 + 0.01, 0.08, 0.085, -0.7, 0.7, DARK); // tread
+  return m;
+}
+
+/** The piston under a platform, one unit tall so it can be stretched up. */
+export function buildHangarPiston(): Mesh {
+  return new Mesh().combine(buildCylinder(0.22, 1, 10), vec3(0, -0.5, 0), rgb(0.6, 0.62, 0.6));
+}
+
+/** The spotlight's housing on the gantry, its lens toward -Z so it can be aimed with lookAt. */
+export function buildSpotlightLamp(): Mesh {
+  const m = new Mesh();
+  m.combine(buildCylinder(0.22, 0.3, 10), buildMatrix(vec3(), vec3(Math.PI / 2, 0, 0)), DARK);
+  m.combine(buildCylinder(0.18, 0.02, 10), buildMatrix(vec3(0, 0, -0.16), vec3(Math.PI / 2, 0, 0)), LAMP);
+  return m;
+}
+
+/** A status lamp on the back wall of a bay. */
+export function buildBayLamp(): Mesh {
+  return new Mesh().combine(buildBox(vec3(0.16, 0.16, 0.04), 0.02), vec3(), WHITE);
+}

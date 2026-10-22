@@ -44,11 +44,15 @@ export function keyLabel(code: string | undefined): string {
 }
 
 type Ctx = CanvasRenderingContext2D;
-interface Area {
+export interface Area {
   x: number;
   y: number;
   w: number;
   h: number;
+}
+export interface Point {
+  x: number;
+  y: number;
 }
 
 /** Ticks a banner stays up. */
@@ -96,6 +100,8 @@ export function drawHud(
   mapOpen: ReadonlySet<PlayerId>,
   /** What Ground Fire does once the game is over: next map, try again, play again. */
   endHint = 'PLAY AGAIN',
+  /** Where each bunker bay's caption goes on screen, over the 3D hangar. */
+  bunkerSlots: (player: PlayerId, area: Area) => readonly Point[] = () => [],
 ): void {
   const ctx = mainContext;
   const players = [...world.players.values()];
@@ -109,7 +115,7 @@ export function drawHud(
     if (world.outcome) drawGameOver(ctx, world, p, area, keys, endHint);
     else if (p.mode === 'bunker' && mapOpen.has(p.id))
       drawMapScreen(ctx, world, p.id, area, `${keyLabel(keys.fireAir[0])} back to the bunker`);
-    else if (p.mode === 'bunker') drawBunker(ctx, p, area, keys);
+    else if (p.mode === 'bunker') drawBunker(ctx, p, area, keys, bunkerSlots(p.id, area));
     else drawField(ctx, world, p, area, keys);
     const banner = banners.get(p.id);
     if (!world.outcome && banner && banner.until > world.tick)
@@ -166,51 +172,46 @@ function drawGameOver(
   ctx.restore();
 }
 
-function drawBunker(ctx: Ctx, p: PlayerState, area: Area, keys: Bindings): void {
+/** Captions over the 3D hangar (render/hangar.ts): each bay's vehicle and stock, the controls. */
+function drawBunker(ctx: Ctx, p: PlayerState, area: Area, keys: Bindings, slots: readonly Point[]): void {
   const { x: x0, w, h } = area;
-  ctx.fillStyle = 'rgba(12, 16, 14, .85)';
-  ctx.fillRect(x0, 0, w, h);
   ctx.textAlign = 'center';
-  ctx.fillStyle = HUD.text;
-  ctx.font = 'bold 22px monospace';
-  ctx.fillText(`${p.id} BUNKER`, x0 + w / 2, h * 0.22);
+  shadowed(ctx, `${p.id} BUNKER`, x0 + w / 2, h * 0.08, HUD.text, 'bold 22px monospace');
   ctx.fillStyle = TEAM_CSS[p.id];
-  ctx.fillRect(x0 + w / 2 - 60, h * 0.22 + 18, 120, 3);
+  ctx.fillRect(x0 + w / 2 - 60, h * 0.08 + 18, 120, 3);
 
-  const slotW = Math.min(150, (w - 40) / 4);
-  const box = slotW - 12;
-  const left = x0 + w / 2 - slotW * 2;
-  const sy = h * 0.35;
+  const size = Math.max(10, Math.min(15, Math.round(w / 60)));
   VEHICLE_ORDER.forEach((type, i) => {
-    const sx = left + i * slotW + 6;
+    const at = slots[i];
+    if (!at) return;
     const count = p.stock[type];
     const selected = i === p.selected;
-    ctx.fillStyle = selected ? '#4a5a2a' : '#22261e';
-    ctx.fillRect(sx, sy, box, box);
-    ctx.strokeStyle = selected ? '#e8d23a' : HUD.edge;
-    ctx.lineWidth = selected ? 3 : 1;
-    ctx.strokeRect(sx, sy, box, box);
-    ctx.font = 'bold 13px monospace';
-    ctx.fillStyle = count ? '#eee' : '#666';
-    ctx.fillText(VEHICLE_NAMES[type], sx + box / 2, sy + box / 2 - 8);
-    ctx.fillText(count ? `x${count}` : 'EMPTY', sx + box / 2, sy + box / 2 + 12);
-    if (!count) {
-      // a type with no stock left shows as an empty slot (SPEC §9.2)
-      ctx.strokeStyle = '#a33';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(sx + 6, sy + 6);
-      ctx.lineTo(sx + box - 6, sy + box - 6);
-      ctx.stroke();
-    }
+    const color = selected ? '#f2d43a' : count ? HUD.text : '#777';
+    const name = selected ? `> ${VEHICLE_NAMES[type]} <` : VEHICLE_NAMES[type];
+    shadowed(ctx, name, at.x, at.y + size, color, `bold ${size}px monospace`);
+    // a type with no stock left shows as an empty bay (SPEC §9.2)
+    shadowed(
+      ctx,
+      count ? `x${count}` : 'EMPTY',
+      at.x,
+      at.y + size * 2.3,
+      count ? color : '#c44',
+      `${size}px monospace`,
+    );
   });
 
-  ctx.font = '14px monospace';
-  ctx.fillStyle = HUD.dim;
   const choose = `${keyLabel(keys.left[0])}/${keyLabel(keys.right[0])} choose`;
   const deploy = `${keyLabel(keys.fireGround[0])} deploy`;
   const map = `${keyLabel(keys.fireAir[0])} map`;
-  ctx.fillText(`${choose}   ${deploy}   ${map}`, x0 + w / 2, sy + slotW + 20);
+  shadowed(ctx, `${choose}   ${deploy}   ${map}`, x0 + w / 2, h * 0.94, HUD.dim, '14px monospace');
+}
+
+function shadowed(ctx: Ctx, text: string, x: number, y: number, color: string, font: string): void {
+  ctx.font = font;
+  ctx.fillStyle = '#000';
+  ctx.fillText(text, x + 2, y + 2);
+  ctx.fillStyle = color;
+  ctx.fillText(text, x, y);
 }
 
 function drawField(ctx: Ctx, world: World, p: PlayerState, area: Area, keys: Bindings): void {

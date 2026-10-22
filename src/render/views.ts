@@ -48,6 +48,17 @@ export class PlayerView {
     this.camera.pos = this.target.add(vec3(0, CAMERA_HEIGHT, CAMERA_BACK));
     this.camera.lookAt(this.target);
   }
+
+  /** Where a world point lands on the 2D canvas, in a view drawn over `area`. */
+  toScreen(p: Vector3, area: Viewport): { x: number; y: number } {
+    const c = this.camera;
+    const d = p.subtract(c.pos);
+    const t = Math.tan(c.fov / 2) * Math.max(0.01, d.dot(c.getForward()));
+    return {
+      x: area.x + (area.w / 2) * (1 + d.dot(c.getRight()) / (t * (area.w / area.h))),
+      y: area.y + (area.h / 2) * (1 - d.dot(c.getUp()) / t),
+    };
+  }
 }
 
 interface Viewport {
@@ -61,6 +72,8 @@ export class SplitScreen {
   views: PlayerView[] = [];
   /** The view being drawn right now, for draws that differ per player. */
   current = 0;
+  /** Called as each view starts drawing, to set what differs per view, like the lighting. */
+  onView?: (i: number) => void;
   private aspect?: number;
 
   /** Call before `new Render3DPlugin`, so this preRender runs ahead of the engine's 3D pass. */
@@ -97,6 +110,7 @@ export class SplitScreen {
     this.aspect = vp.w / vp.h;
     render3D.camera = view.camera;
     this.current = i;
+    this.onView?.(i);
   }
 
   private beginFirstView(): void {
@@ -106,6 +120,7 @@ export class SplitScreen {
     if (!this.split) {
       this.aspect = undefined;
       render3D.camera = (this.views[0] as PlayerView).camera;
+      this.onView?.(0);
       return;
     }
     glContext.enable(glContext.SCISSOR_TEST);

@@ -8,6 +8,7 @@ import {
   ParticleEmitter3D,
   render3D,
   rgb,
+  type Vector3,
   vec3,
 } from 'littlejsengine';
 import { playSfx } from '../audio/sfx';
@@ -16,7 +17,7 @@ import type { Soldier } from '../sim/soldiers';
 import type { Structure } from '../sim/structures';
 import { Tile } from '../sim/terrain';
 import { DRONES, HELI } from '../sim/tuning';
-import type { PlayerId } from '../sim/types';
+import type { PlayerId, Team, VehicleType } from '../sim/types';
 import type { Vehicle } from '../sim/vehicles/vehicle';
 import type { Shot, SimEvent, World } from '../sim/world';
 import {
@@ -40,7 +41,7 @@ import {
 import { SEA_LEVEL, TerrainView, toWorld } from './terrain';
 import { THEMES } from './themes';
 
-interface VehicleView {
+export interface VehicleView {
   root: EngineObject3D;
   turret?: EngineObject3D;
   rotor?: EngineObject3D;
@@ -262,53 +263,10 @@ export class SceneView {
     }
   }
 
-  private createVehicleView(v: Vehicle): VehicleView {
-    const at = toWorld(v.x, v.y);
-    const view = (root: EngineObject3D, shadow: number): VehicleView => {
-      root.softShadow = shadow;
-      return { root, wheels: [], rotorAngle: 0 };
-    };
-    switch (v.type) {
-      case 'tank': {
-        const meshes = buildTank(v.team);
-        const out = view(new EngineObject3D(at, meshes.hull), 1.2);
-        out.turret = new EngineObject3D(vec3(0, 0.31, 0), meshes.turret);
-        out.root.addChild(out.turret);
-        return out;
-      }
-      case 'asv':
-        return view(new EngineObject3D(at, buildAsv(v.team)), 1.4);
-      case 'heli': {
-        const meshes = buildHeli(v.team);
-        const out = view(new EngineObject3D(at, meshes.body), 1.6);
-        out.rotor = new EngineObject3D(vec3(0, 0.7, 0), meshes.rotor);
-        out.tailRotor = new EngineObject3D(vec3(0.08, 0.55, 1.25), meshes.tailRotor);
-        out.root.addChild(out.rotor);
-        out.root.addChild(out.tailRotor);
-        return out;
-      }
-      case 'jeep': {
-        const meshes = buildJeep(v.team);
-        const out = view(new EngineObject3D(at, meshes.body), 0.9);
-        for (const [x, z] of [
-          [-0.26, -0.27],
-          [0.26, -0.27],
-          [-0.26, 0.27],
-          [0.26, 0.27],
-        ] as const) {
-          const wheel = new EngineObject3D(vec3(x, 0.2, z), meshes.wheel);
-          out.root.addChild(wheel);
-          out.wheels.push(wheel);
-        }
-        return out;
-      }
-    }
-  }
-
   private syncVehicle(v: Vehicle): void {
     let view = this.vehicles.get(v.id);
     if (!view) {
-      view = this.createVehicleView(v);
+      view = buildVehicleView(v.type, v.team, toWorld(v.x, v.y));
       this.vehicles.set(v.id, view);
     }
     let height = -v.elevator * SHAFT_DEPTH;
@@ -442,6 +400,49 @@ export class SceneView {
   private vehiclePos(id: number) {
     const v = this.world.vehicles.find((x) => x.id === id);
     return v ? toWorld(v.x, v.y) : undefined;
+  }
+}
+
+/** A vehicle model put together from its parts: the turret, rotors and wheels as children. */
+export function buildVehicleView(type: VehicleType, team: Team, at: Vector3): VehicleView {
+  const view = (root: EngineObject3D, shadow: number): VehicleView => {
+    root.softShadow = shadow;
+    return { root, wheels: [], rotorAngle: 0 };
+  };
+  switch (type) {
+    case 'tank': {
+      const meshes = buildTank(team);
+      const out = view(new EngineObject3D(at, meshes.hull), 1.2);
+      out.turret = new EngineObject3D(vec3(0, 0.31, 0), meshes.turret);
+      out.root.addChild(out.turret);
+      return out;
+    }
+    case 'asv':
+      return view(new EngineObject3D(at, buildAsv(team)), 1.4);
+    case 'heli': {
+      const meshes = buildHeli(team);
+      const out = view(new EngineObject3D(at, meshes.body), 1.6);
+      out.rotor = new EngineObject3D(vec3(0, 0.7, 0), meshes.rotor);
+      out.tailRotor = new EngineObject3D(vec3(0.08, 0.55, 1.25), meshes.tailRotor);
+      out.root.addChild(out.rotor);
+      out.root.addChild(out.tailRotor);
+      return out;
+    }
+    case 'jeep': {
+      const meshes = buildJeep(team);
+      const out = view(new EngineObject3D(at, meshes.body), 0.9);
+      for (const [x, z] of [
+        [-0.26, -0.27],
+        [0.26, -0.27],
+        [-0.26, 0.27],
+        [0.26, 0.27],
+      ] as const) {
+        const wheel = new EngineObject3D(vec3(x, 0.2, z), meshes.wheel);
+        out.root.addChild(wheel);
+        out.wheels.push(wheel);
+      }
+      return out;
+    }
   }
 }
 
