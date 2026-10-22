@@ -126,6 +126,15 @@ function gameInit() {
   startLevel(directLevel ?? selectedLevel(menu) ?? defaultLevelId(1), newSeed());
 }
 
+/** Each player's controls this frame, keyboard and gamepad together. */
+function readInputs(): Partial<Record<PlayerId, InputFrame>> {
+  const inputs: Partial<Record<PlayerId, InputFrame>> = {};
+  players.forEach((p, i) => {
+    inputs[p] = mergeInputs(readInput(bindings[p]), readGamepad(i));
+  });
+  return inputs;
+}
+
 /** A fresh world for a level and everything drawn for it. */
 function startLevel(id: string, seed: number) {
   engineObjectsDestroy();
@@ -137,6 +146,13 @@ function startLevel(id: string, seed: number) {
   if (showcase) addShowcaseStructures(level);
   world = new World(level, seed);
   players = [...world.players.keys()];
+  // the key that started the map may still be down: only a fresh press deploys or opens the map
+  const held = readInputs();
+  for (const p of players) {
+    const input = held[p];
+    if (input) world.player(p).prevInput = input;
+    lastAir.set(p, input?.fireAir ?? false);
+  }
   if (showcase) parkShowcase(world);
   const theme = THEMES[world.level.theme];
   render3D.setSky(...theme.sky, 0.55);
@@ -239,10 +255,7 @@ function gameUpdate() {
     backToMenu();
     return;
   }
-  const inputs: Partial<Record<PlayerId, InputFrame>> = {};
-  players.forEach((p, i) => {
-    inputs[p] = mergeInputs(readInput(bindings[p]), readGamepad(i));
-  });
+  const inputs = readInputs();
   toggleMaps(inputs);
   world.step(inputs);
   scene.handleEvents(world.events);
