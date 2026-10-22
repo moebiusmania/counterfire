@@ -1,8 +1,9 @@
 // Counterfire entry point: engine setup, the menu, the fixed-step game loop and the render hooks.
 //
 // The game opens on the title menu (SPEC §5.1). URL options skip it for development and tests:
-// `?level=<id>` plays a level, `?players=2` the first duel, `?showcase` the model line-up, `?seed=N`
-// fixes the seed, and `?test` hands the live world to the browser smoke test.
+// `?level=<id>` plays a level, `?players=2` the first duel, `?showcase` the model line-up (with
+// `&silhouette`, in black from the gameplay camera), `?seed=N` fixes the seed, and `?test` hands the
+// live world to the browser smoke test.
 // In play: Esc goes back to the menu, F3 pauses, Alt+Enter toggles full screen (SPEC §9.7).
 
 import {
@@ -43,6 +44,8 @@ import { drawMenu, initialMenu, type MenuAction, type MenuState, menuInput, sele
 
 const params = new URLSearchParams(location.search);
 const showcase = params.has('showcase');
+/** `?showcase&silhouette`: the line-up in black from the gameplay camera (SPEC §12.2). */
+const silhouette = showcase && params.has('silhouette');
 const directLevel = showcase
   ? 'training-01'
   : (params.get('level') ?? (params.get('players') === '2' ? defaultLevelId(2) : undefined));
@@ -267,7 +270,10 @@ function gameUpdatePost() {
   if (showcase) {
     const b = world.player('P1').bunker;
     const view = split.views[0];
-    if (view) {
+    if (view && silhouette) {
+      scene.silhouette();
+      view.follow(toWorld(b.x + 0.8, b.y + 2));
+    } else if (view) {
       view.camera.pos = toWorld(b.x, b.y - 2.5, 4.2);
       view.camera.lookAt(toWorld(b.x, b.y + 2, 0.4));
     }

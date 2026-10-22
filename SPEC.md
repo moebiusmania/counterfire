@@ -2,7 +2,7 @@
 
 **Counterfire** is a browser game that remakes **Return Fire** (Silent Software, 3DO 1995 / Windows 95 1996) and matches the original's gameplay feature for feature. It is built with **Bun**, **TypeScript** and **LittleJS**. Its levels and 3D models are new, made in the style of the original.
 
-> **Status:** v0.9, 2026-10-22. Milestones 0 to 7 are done (§15); the 72 maps have passed automated checks but no human playtest yet.
+> **Status:** v0.9, 2026-10-22. Milestones 0 to 8 are done (§15); the 72 maps have passed automated checks but no human playtest yet.
 > **Name:** Counterfire (§12.3).
 > **Source of truth for behaviour:** the original Windows 95 release. Where this spec and the original disagree on rules or mechanics, the original wins and this spec gets corrected. Levels and models deliberately differ from the original (§10, §12). Items marked **[VERIFY]** are not confirmed by a primary source yet. Someone must check them against the original game (by playing it or using the manual) before they count as final.
 
@@ -453,6 +453,12 @@ v1 has no music. The game emits the events a future music layer will need: `vehi
 - **Never redistribute the original game's models, textures, audio, video or map files.** All shipped assets and levels are original work.
 - "Return Fire" is a trademark, so the public game ships as **Counterfire**. Clear the "Counterfire" trademark and domain before any public release. Use only "Counterfire" in the game, the UI, the store pages and the repository. Mention "Return Fire" only as an inspiration, e.g. in the credits.
 
+### 12.4 How the shipped models are made (milestone 8)
+- Every model is built in code from LittleJS primitives (`src/render/models.ts`), with flat vertex colours and no textures. Milestone 8 kept the existing shapes and added detail: road wheels, fenders, lights, hatches, exhausts, windows, sandbags, fins and similar.
+- No `.glb` files ship yet. LittleJS's `loadGLTF` is there for when artist-made models replace the code-built ones.
+- Silhouette check: `?showcase&silhouette` shows the line-up in black from the gameplay camera, and the browser smoke test screenshots it. `tests/models.test.ts` keeps each vehicle within 500 to 3000 triangles.
+- Not done: barrel recoil, tread scroll and the elevator platform animation.
+
 ---
 
 ## 13. Input
@@ -507,7 +513,7 @@ For each item in §6 to §11, record a side-by-side clip of the original and the
 | 5 | **2-player** ✅ | split-screen, mines, flag-defence behaviours |
 | 6 | **UI/Audio** ✅ | bunker, map, radar, HUD, beacon, SFX, skull, victory |
 | 7 | **Content** ✅ | level editor + validator, all 72 maps built (§10.2). Automated checks done; human playtesting still to do. |
-| 8 | **Art pass** | all recreated models and textures, silhouette check (§12.2) |
+| 8 | **Art pass** ✅ | models refined in code (§12.4), silhouette check (§12.2) |
 | 9 | **Polish/Release** | performance targets, rebinding, gamepads, "Counterfire" trademark and domain cleared |
 
 ---

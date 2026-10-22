@@ -338,6 +338,19 @@ export class SceneView {
     if (v.state === 'destroyed') this.tint(view, WRECK);
   }
 
+  /** Paints every model flat black for the silhouette check (SPEC §12.2); call after sync. */
+  silhouette(): void {
+    const black = rgb(0, 0, 0);
+    for (const view of this.vehicles.values()) this.tint(view, black);
+    for (const { obj, head } of this.structures.values()) for (const o of [obj, head]) if (o) o.color = black;
+    for (const { obj } of this.soldiers.values()) obj.color = black;
+    for (const { pole, cloth } of this.flags.values()) pole.color = cloth.color = black;
+    for (const obj of [this.sub, ...this.drones.values(), ...this.lamps.values()]) {
+      obj.color = black;
+      obj.emissive = 0;
+    }
+  }
+
   private tint(view: VehicleView, color: Color): void {
     view.root.color = color;
     for (const c of [view.turret, view.rotor, view.tailRotor, ...view.wheels]) if (c) c.color = color;

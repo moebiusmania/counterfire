@@ -86,6 +86,7 @@ const scenarios: { name: string; query: string; steps: Step[] }[] = [
     steps: [{ wait: 1200 }, { press: ['KeyH', 'KeyH'], wait: 1500 }, { press: ['KeyH'], wait: 1500 }],
   },
   { name: 'showcase', query: '?showcase', steps: [{ wait: 1500 }] },
+  { name: 'silhouette', query: '?showcase&silhouette', steps: [{ wait: 1500 }] },
   { name: 'map', query: '?players=2', steps: [{ wait: 1200 }, { press: ['KeyJ'], wait: 600 }] },
   { name: 'desert-map', query: '?level=t4-3', steps: [{ wait: 1200 }, { press: ['KeyJ'], wait: 600 }] },
   { name: 'chessboard-map', query: '?level=t3-6', steps: [{ wait: 1200 }, { press: ['KeyJ'], wait: 600 }] },
