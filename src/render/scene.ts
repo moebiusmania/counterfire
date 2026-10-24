@@ -44,6 +44,8 @@ import {
   buildSubmarine,
   buildTank,
   buildTurretParts,
+  buildUfo,
+  type HeliMeshes,
   type TankMeshes,
 } from './models';
 import { SEA_LEVEL, TerrainView, toWorld } from './terrain';
@@ -430,6 +432,12 @@ const TANK_SKINS: Record<string, (team: Team) => TankMeshes> = {
   scorpion: buildScorpion,
 };
 
+/** The helicopter's models by skin; any other skin is the standard helicopter. */
+const HELI_SKINS: Record<string, (team: Team) => HeliMeshes> = {
+  'f-117a': buildF117,
+  ufo: buildUfo,
+};
+
 /** A vehicle model put together from its parts: the turret, rotors and wheels as children. */
 export function buildVehicleView(type: VehicleType, team: Team, at: Vector3, skin = 0): VehicleView {
   const view = (root: EngineObject3D, shadow: number): VehicleView => {
@@ -450,7 +458,8 @@ export function buildVehicleView(type: VehicleType, team: Team, at: Vector3, ski
       return view(new EngineObject3D(at, build(team)), 1.4);
     }
     case 'heli': {
-      const meshes = VEHICLE_SKINS.heli[skin] === 'f-117a' ? buildF117(team) : buildHeli(team);
+      const build = HELI_SKINS[VEHICLE_SKINS.heli[skin] ?? ''] ?? buildHeli;
+      const meshes = build(team);
       const out = view(new EngineObject3D(at, meshes.body), 1.6);
       if (meshes.rotor) {
         out.rotor = new EngineObject3D(vec3(0, 0.7, 0), meshes.rotor);

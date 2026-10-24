@@ -10,6 +10,7 @@ import {
   buildPanda,
   buildScorpion,
   buildTank,
+  buildUfo,
 } from '../src/render/models';
 
 const triangles = (...meshes: Mesh[]) =>
@@ -18,6 +19,7 @@ const triangles = (...meshes: Mesh[]) =>
 test('each vehicle stays inside the polygon budget (SPEC §12.2)', () => {
   const tank = buildTank('P1');
   const heli = buildHeli('P1');
+  const ufo = buildUfo('P1');
   const jeep = buildJeep('P1');
   const panda = buildPanda('P1');
   const slug = buildMetalSlug('P1');
@@ -27,6 +29,7 @@ test('each vehicle stays inside the polygon budget (SPEC §12.2)', () => {
     asv: triangles(buildAsv('P1')),
     heli: triangles(heli.body, ...[heli.rotor, heli.tailRotor].filter((m) => m !== undefined)),
     f117: triangles(buildF117('P1').body),
+    ufo: triangles(ufo.body, ...[ufo.rotor].filter((m) => m !== undefined)),
     aTeam: triangles(buildATeamVan('P1')),
     jeep: triangles(jeep.body) + 4 * triangles(jeep.wheel),
     slug: triangles(slug.hull, slug.turret),

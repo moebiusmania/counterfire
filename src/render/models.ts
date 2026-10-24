@@ -617,6 +617,70 @@ export function buildF117(team: Team): HeliMeshes {
   return { body };
 }
 
+const SAUCER = rgb(0.68, 0.7, 0.74);
+const SAUCER_DARK = rgb(0.48, 0.5, 0.55);
+const DOME = rgb(0.45, 0.75, 0.72);
+const BEAM = rgb(0.55, 0.95, 0.6);
+
+/**
+ * The helicopter's UFO skin: the classic 1950s flying saucer, a silver lens-shaped hull under a glass
+ * dome, a glowing emitter in its belly and three landing legs. The ring of rim lights sits where the
+ * rotor would, so it spins with it; a ray gun under the front rim shows which way it faces.
+ */
+export function buildUfo(team: Team): HeliMeshes {
+  const body = new Mesh();
+  body.combine(buildSphere(1.3, 18, 8), buildMatrix(vec3(0, 0.36, 0), vec3(), vec3(1, 0.22, 1)), SAUCER);
+  body.combine(buildTorus(1.3, 0.05, 18, 4), vec3(0, 0.36, 0), SAUCER_DARK); // rim
+  body.combine(buildSphere(0.9, 16, 6), buildMatrix(vec3(0, 0.44, 0), vec3(), vec3(1, 0.3, 1)), SAUCER_DARK);
+  body.combine(buildSphere(0.42, 12, 8), buildMatrix(vec3(0, 0.56, 0), vec3(), vec3(1, 0.85, 1)), DOME);
+  body.combine(buildTorus(0.78, 0.04, 16, 4), vec3(0, 0.51, 0), TEAM_COLORS[team]); // team band round the deck
+  // the belly emitter, and three legs leaning out to their pads
+  body.combine(buildCylinder(0.4, 0.04, 12), vec3(0, 0.22, 0), BEAM);
+  body.combine(buildTorus(0.44, 0.03, 12, 4), vec3(0, 0.22, 0), STEEL);
+  for (let i = 0; i < 3; i++) {
+    const turn = buildMatrix(vec3(), vec3(0, Math.PI / 2 + (i * Math.PI * 2) / 3, 0));
+    body.combine(
+      buildBox(vec3(0.03, 0.25, 0.03))
+        .transform(buildMatrix(vec3(0.415, 0.13, 0), vec3(0, 0, 0.28)))
+        .transform(turn),
+      vec3(),
+      STEEL,
+    );
+    body.combine(
+      buildCylinder(0.1, 0.02, 8)
+        .transform(buildMatrix(vec3(0.45, 0.01, 0)))
+        .transform(turn),
+      vec3(),
+      DARK,
+    );
+  }
+  // the ray gun under the front rim, and a pair of lamps either side of it
+  body.combine(buildSphere(0.12, 8, 6), vec3(0, 0.26, -0.42), STEEL);
+  body.combine(
+    buildCylinder(0.035, 0.24, 6),
+    buildMatrix(vec3(0, 0.25, -0.55), vec3(Math.PI / 2, 0, 0)),
+    DARK,
+  );
+  body.combine(buildSphere(0.05, 6, 4), vec3(0, 0.25, -0.67), BEAM); // muzzle
+  for (const side of [-1, 1])
+    body.combine(
+      buildBox(vec3(0.08, 0.03, 0.02)),
+      buildMatrix(vec3(side * 0.18, 0.33, -0.62), vec3(0, side * 0.28, 0)),
+      LAMP,
+    );
+  // the rim lights, alternating, around the mount the rotor would hang from
+  const rotor = new Mesh();
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    rotor.combine(
+      buildSphere(0.07, 6, 4),
+      vec3(Math.sin(a) * 0.67, -0.34, Math.cos(a) * 0.67),
+      i % 2 ? LAMP : BEAM,
+    );
+  }
+  return { body, rotor };
+}
+
 export interface JeepMeshes {
   body: Mesh;
   wheel: Mesh;

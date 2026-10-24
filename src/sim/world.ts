@@ -26,7 +26,7 @@ export const VEHICLE_ORDER: readonly VehicleType[] = ['tank', 'asv', 'heli', 'je
 export const VEHICLE_SKINS: Record<VehicleType, readonly string[]> = {
   tank: ['standard', 'metal slug', 'scorpion'],
   asv: ['standard', 'a-team'],
-  heli: ['standard', 'f-117a'],
+  heli: ['standard', 'f-117a', 'ufo'],
   jeep: ['standard', 'panda'],
 };
 
