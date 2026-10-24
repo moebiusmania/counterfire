@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { Tile } from '../src/sim/terrain';
 import { DEPOT, HELI, JEEP, MINES, SHOTS, VEHICLES } from '../src/sim/tuning';
 import { type InputFrame, input, type PlayerId } from '../src/sim/types';
+import { heliAimPoint } from '../src/sim/vehicles/heli';
 import { World } from '../src/sim/world';
 import { openField, testLevel, twoPlayerLevel } from './helpers';
 
@@ -91,6 +92,26 @@ describe('helicopter', () => {
     expect(heli.rockets).toBe(HELI.rockets - 1);
     until(world, 'bridgeDestroyed');
     expect(world.terrain.get(2, 4)).toBe(Tile.Deep);
+  });
+
+  test('the aim point is where the gun and the rockets come down', () => {
+    const world = new World(openField(), 1);
+    const heli = world.spawnVehicle('P1', 'heli');
+    heli.heading = 0.7;
+    for (const weapon of ['gun', 'rockets'] as const) {
+      heli.weapon = weapon;
+      heli.cooldown = 0;
+      const aim = heliAimPoint(heli);
+      world.step({ P1: input({ fireGround: true }) });
+      const shot = world.shots.at(-1);
+      let landed: { x: number; y: number } | undefined;
+      for (let i = 0; i < 100 && !landed; i++) {
+        world.step({ P1: input() });
+        if (shot && !world.shots.includes(shot)) landed = shot;
+      }
+      // the paired launchers sit either side of the line of fire
+      expect(Math.hypot((landed?.x ?? 0) - aim.x, (landed?.y ?? 0) - aim.y)).toBeLessThan(0.35);
+    }
   });
 
   test('the gun leaves bridges alone', () => {

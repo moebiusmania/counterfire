@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { splitMix } from '../src/audio/mix';
 import { DEFAULT_BINDINGS, rebind } from '../src/input/bindings';
-import { mergeInputs, PAD, padToInput } from '../src/input/gamepad';
+import { mergeInputs, PAD, padToInput, padToMenu } from '../src/input/gamepad';
+import { dpadDirection } from '../src/input/touch';
 import { input } from '../src/sim/types';
 
 const pad = (stick = { x: 0, y: 0 }, dpad = { x: 0, y: 0 }, down: number[] = []) => ({
@@ -28,11 +29,40 @@ describe('gamepad', () => {
     expect(padToInput(pad(undefined, undefined, [PAD.rt])).auxRight).toBe(true);
   });
 
+  test('in the menus the pad moves with the stick or d-pad, chooses with A or Start, goes back with B', () => {
+    expect([...padToMenu(pad({ x: 0, y: 0.9 }))]).toEqual(['up']);
+    expect([...padToMenu(pad(undefined, { x: -1, y: 0 }))]).toEqual(['left']);
+    expect([...padToMenu(pad(undefined, undefined, [PAD.a]))]).toEqual(['select']);
+    expect([...padToMenu(pad(undefined, undefined, [PAD.start]))]).toEqual(['select']);
+    expect([...padToMenu(pad(undefined, undefined, [PAD.b]))]).toEqual(['back']);
+    expect(padToMenu(pad()).size).toBe(0);
+  });
+
   test('keyboard and gamepad add up', () => {
     expect(mergeInputs(input({ forward: true }), input({ fireGround: true }))).toEqual(
       input({ forward: true, fireGround: true }),
     );
     expect(mergeInputs(input({ left: true }), undefined)).toEqual(input({ left: true }));
+  });
+});
+
+describe('on-screen d-pad', () => {
+  const ways = (dx: number, dy: number) =>
+    Object.entries(dpadDirection(dx, dy, 0.25))
+      .filter(([, on]) => on)
+      .map(([k]) => k);
+
+  test('it presses the way it leans, screen up being forward', () => {
+    expect(ways(0, -1)).toEqual(['forward']);
+    expect(ways(0, 1)).toEqual(['back']);
+    expect(ways(-1, 0)).toEqual(['left']);
+    expect(ways(1, 0.1)).toEqual(['right']);
+  });
+
+  test('a diagonal presses both ways, and the middle presses nothing', () => {
+    expect(ways(0.7, -0.7)).toEqual(['forward', 'right']);
+    expect(ways(-0.7, 0.7)).toEqual(['back', 'left']);
+    expect(ways(0.1, 0.1)).toEqual([]);
   });
 });
 

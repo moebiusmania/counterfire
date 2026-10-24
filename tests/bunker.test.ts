@@ -47,6 +47,24 @@ describe('bunker', () => {
     expect(v?.controllable).toBe(true);
   });
 
+  test('up and down pick a skin for the selected type, and the deployed vehicle wears it', () => {
+    const world = new World(openField(), 1);
+    const p = world.player('P1');
+    press(world, input({ right: true }));
+    press(world, input({ back: true }));
+    expect(p.skins.asv).toBe(1); // each type keeps its own choice
+    expect(p.skins.tank).toBe(0);
+    press(world, input({ left: true }));
+    press(world, input({ forward: true }));
+    expect(p.skins.tank).toBe(2); // up wraps round to the last skin
+    press(world, input({ left: true })); // the jeep, which wraps round from the tank
+    press(world, input({ back: true }));
+    expect(p.skins.jeep).toBe(1);
+    press(world, input({ fireGround: true }));
+    expect(p.vehicle?.type).toBe('jeep');
+    expect(p.vehicle?.skin).toBe(1);
+  });
+
   test('an empty slot deploys nothing', () => {
     const world = new World(openField(), 1);
     const p = world.player('P1');

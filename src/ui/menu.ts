@@ -92,6 +92,94 @@ function controlsInput(m: MenuState, action: MenuAction): { menu: MenuState; res
 
 type Ctx = CanvasRenderingContext2D;
 
+/** The buttons in the menu's top right corner, right to left. */
+export const CORNER_BUTTONS = ['fullscreen', 'touch'] as const;
+export type CornerButton = (typeof CORNER_BUTTONS)[number];
+
+/** Where a corner button sits, in canvas pixels. */
+export function cornerButton(w: number, button: CornerButton): { x: number; y: number; size: number } {
+  const size = 40;
+  const i = CORNER_BUTTONS.indexOf(button);
+  return { x: w - 16 - size - i * (size + 10), y: 16, size };
+}
+
+/** The corner button under a point, if any. */
+export function cornerButtonAt(w: number, x: number, y: number): CornerButton | undefined {
+  return CORNER_BUTTONS.find((button) => {
+    const b = cornerButton(w, button);
+    return x >= b.x && x <= b.x + b.size && y >= b.y && y <= b.y + b.size;
+  });
+}
+
+/** What the corner buttons show: full screen and the touch controls each on or off, and the one hovered. */
+export interface CornerState {
+  fullscreen: boolean;
+  touch: boolean;
+  hover?: CornerButton;
+}
+
+function drawCornerButtons(ctx: Ctx, w: number, state: CornerState): void {
+  for (const button of CORNER_BUTTONS) {
+    const { x, y, size } = cornerButton(w, button);
+    const hover = state.hover === button;
+    ctx.fillStyle = hover ? 'rgba(74, 90, 42, .9)' : 'rgba(20, 24, 16, .8)';
+    ctx.fillRect(x, y, size, size);
+    ctx.strokeStyle = ctx.fillStyle = hover ? '#e8d23a' : '#cfd3c0';
+    ctx.lineWidth = 3;
+    if (button === 'fullscreen') drawFullscreenIcon(ctx, x, y, size, state.fullscreen);
+    else drawTouchIcon(ctx, x, y, size, state.touch);
+  }
+}
+
+/** Four corner brackets, pointing out to go full screen and in to leave it. */
+function drawFullscreenIcon(ctx: Ctx, x: number, y: number, size: number, full: boolean): void {
+  const inset = 10;
+  const arm = 7;
+  for (const [cx, cy] of [
+    [x + inset, y + inset],
+    [x + size - inset, y + inset],
+    [x + inset, y + size - inset],
+    [x + size - inset, y + size - inset],
+  ] as const) {
+    // each bracket's arms run from its corner toward the button's middle, or away from it when leaving
+    const dx = (cx < x + size / 2 ? 1 : -1) * (full ? -1 : 1) * arm;
+    const dy = (cy < y + size / 2 ? 1 : -1) * (full ? -1 : 1) * arm;
+    const ox = full ? cx - dx : cx;
+    const oy = full ? cy - dy : cy;
+    ctx.beginPath();
+    ctx.moveTo(ox + dx, oy);
+    ctx.lineTo(ox, oy);
+    ctx.lineTo(ox, oy + dy);
+    ctx.stroke();
+  }
+}
+
+/** A little gamepad, a d-pad cross on its left and two buttons on its right, struck through when off. */
+function drawTouchIcon(ctx: Ctx, x: number, y: number, size: number, on: boolean): void {
+  const cx = x + size / 2;
+  const cy = y + size / 2;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.roundRect(cx - 14, cy - 8, 28, 16, 6);
+  ctx.stroke();
+  ctx.fillRect(cx - 10, cy - 1.5, 9, 3);
+  ctx.fillRect(cx - 7, cy - 4.5, 3, 9);
+  for (const [bx, by] of [
+    [cx + 6, cy + 2],
+    [cx + 10, cy - 2],
+  ] as const) {
+    ctx.beginPath();
+    ctx.arc(bx, by, 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  if (on) return;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(x + 9, y + size - 9);
+  ctx.lineTo(x + size - 9, y + 9);
+  ctx.stroke();
+}
+
 export function drawMenu(
   ctx: Ctx,
   m: MenuState,
@@ -99,6 +187,7 @@ export function drawMenu(
   bindings: Record<PlayerId, Bindings>,
   w: number,
   h: number,
+  corner: CornerState = { fullscreen: false, touch: false },
 ): void {
   ctx.save();
   ctx.fillStyle = 'rgba(8, 12, 10, .55)';
@@ -114,6 +203,7 @@ export function drawMenu(
   if (m.screen === 'title') drawTitle(ctx, m, w, h);
   else if (m.screen === 'controls') drawControls(ctx, m, bindings, w, h);
   else drawLevels(ctx, m, progress, w, h);
+  drawCornerButtons(ctx, w, corner);
   ctx.restore();
 }
 

@@ -3,7 +3,7 @@
 // Layout and art are [VERIFY] against the original.
 
 import { mainCanvasSize, mainContext } from 'littlejsengine';
-import type { Bindings } from '../input/bindings';
+import type { Action, Bindings } from '../input/bindings';
 import { jeepBeacon } from '../sim/beacon';
 import { outOfBounds } from '../sim/submarine';
 import { BUNKER, GAME_OVER_TICKS } from '../sim/tuning';
@@ -15,6 +15,7 @@ import {
   type SimEvent,
   TICK_RATE,
   VEHICLE_ORDER,
+  VEHICLE_SKINS,
   type World,
 } from '../sim/world';
 import { hasRadar } from './intel';
@@ -102,6 +103,12 @@ export function drawHud(
   endHint = 'PLAY AGAIN',
   /** Where each bunker bay's caption goes on screen, over the 3D hangar. */
   bunkerSlots: (player: PlayerId, area: Area) => readonly Point[] = () => [],
+  options: {
+    /** Players with a gamepad, whose controls legend names its buttons instead of keys. */
+    pads?: ReadonlySet<PlayerId>;
+    /** Dashboards along the top, clear of on-screen controls in the bottom corners. */
+    dashboardTop?: boolean;
+  } = {},
 ): void {
   const ctx = mainContext;
   const players = [...world.players.values()];
@@ -116,10 +123,16 @@ export function drawHud(
     else if (p.mode === 'bunker' && mapOpen.has(p.id))
       drawMapScreen(ctx, world, p.id, area, `${keyLabel(keys.fireAir[0])} back to the bunker`);
     else if (p.mode === 'bunker') drawBunker(ctx, p, area, keys, bunkerSlots(p.id, area));
-    else drawField(ctx, world, p, area, keys);
+    else drawField(ctx, world, p, area, keys, !!options.pads?.has(p.id), !!options.dashboardTop);
     const banner = banners.get(p.id);
     if (!world.outcome && banner && banner.until > world.tick)
-      centered(ctx, banner.text, area.x + area.w / 2, area.h * 0.12, 1);
+      centered(
+        ctx,
+        banner.text,
+        area.x + area.w / 2,
+        Math.max(area.h * 0.12, options.dashboardTop ? 136 : 0),
+        1,
+      );
     ctx.restore();
   });
   if (players.length > 1) {
@@ -198,12 +211,18 @@ function drawBunker(ctx: Ctx, p: PlayerState, area: Area, keys: Bindings, slots:
       count ? color : '#c44',
       `${size}px monospace`,
     );
+    const skins = VEHICLE_SKINS[type];
+    if (skins.length > 1) {
+      const skin = (skins[p.skins[type]] ?? '').toUpperCase();
+      shadowed(ctx, selected ? `< ${skin} >` : skin, at.x, at.y + size * 3.5, HUD.dim, `${size}px monospace`);
+    }
   });
 
   const choose = `${keyLabel(keys.left[0])}/${keyLabel(keys.right[0])} choose`;
+  const skin = `${keyLabel(keys.forward[0])}/${keyLabel(keys.back[0])} skin`;
   const deploy = `${keyLabel(keys.fireGround[0])} deploy`;
   const map = `${keyLabel(keys.fireAir[0])} map`;
-  shadowed(ctx, `${choose}   ${deploy}   ${map}`, x0 + w / 2, h * 0.94, HUD.dim, '14px monospace');
+  shadowed(ctx, `${choose}   ${skin}   ${deploy}   ${map}`, x0 + w / 2, h * 0.94, HUD.dim, '14px monospace');
 }
 
 function shadowed(ctx: Ctx, text: string, x: number, y: number, color: string, font: string): void {
@@ -214,7 +233,15 @@ function shadowed(ctx: Ctx, text: string, x: number, y: number, color: string, f
   ctx.fillText(text, x, y);
 }
 
-function drawField(ctx: Ctx, world: World, p: PlayerState, area: Area, keys: Bindings): void {
+function drawField(
+  ctx: Ctx,
+  world: World,
+  p: PlayerState,
+  area: Area,
+  keys: Bindings,
+  pad: boolean,
+  top: boolean,
+): void {
   const v = p.vehicle;
   const { x: x0, w, h } = area;
   if (v?.state !== 'active') {
@@ -224,16 +251,20 @@ function drawField(ctx: Ctx, world: World, p: PlayerState, area: Area, keys: Bin
     return;
   }
 
-  drawDashboard(ctx, world, p, v, x0 + 12, h - 108);
-  if (v.resupplying) centered(ctx, 'RESUPPLYING', x0 + w / 2, h * 0.2, 1);
+  const y = top ? 12 : h - 108;
+  // messages keep below dashboards along the top
+  const below = (share: number) => Math.max(h * share, top ? 136 + (share - 0.2) * 200 : 0);
+  const panelW = drawDashboard(ctx, world, p, v, x0 + 12, y);
+  drawControls(ctx, vehicleControls(world, v), keys, pad, x0 + 12 + panelW + 8, y);
+  if (v.resupplying) centered(ctx, 'RESUPPLYING', x0 + w / 2, below(0.2), 1);
   const warning = dangerWarning(world, p);
-  if (warning) centered(ctx, warning, x0 + w / 2, h * 0.3, (world.tick >> 4) % 2 ? 1 : 0.5);
+  if (warning) centered(ctx, warning, x0 + w / 2, below(0.3), (world.tick >> 4) % 2 ? 1 : 0.5);
   if (v.onBunker)
-    centered(ctx, `BUNKER LIGHT ON - ${keyLabel(keys.fireGround[0])} TO GO DOWN`, x0 + w / 2, h * 0.2, 1);
+    centered(ctx, `BUNKER LIGHT ON - ${keyLabel(keys.fireGround[0])} TO GO DOWN`, x0 + w / 2, below(0.2), 1);
 }
 
-/** The dashboard: name plate, gauges, extras, and the radar scope or the jeep's beacon. */
-function drawDashboard(ctx: Ctx, world: World, p: PlayerState, v: Vehicle, x: number, y: number): void {
+/** The dashboard: name plate, gauges, extras, and the radar scope or the jeep's beacon. Returns its width. */
+function drawDashboard(ctx: Ctx, world: World, p: PlayerState, v: Vehicle, x: number, y: number): number {
   const radar = hasRadar(v);
   const panelW = radar ? 330 : 250;
   const panelH = 96;
@@ -277,6 +308,95 @@ function drawDashboard(ctx: Ctx, world: World, p: PlayerState, v: Vehicle, x: nu
 
   if (radar) drawRadar(ctx, world, v, x + panelW - 50, y + panelH / 2, 42);
   if (v.type === 'jeep') drawBeacon(ctx, jeepBeacon(world, v), x + panelW - 22, y + 17);
+  return panelW;
+}
+
+/** A control on the legend: the actions pressed together, and what they do. */
+export interface Control {
+  actions: Action[];
+  label: string;
+}
+
+/** The vehicle's controls other than driving, for the legend beside the dashboard. */
+export function vehicleControls(world: World, v: Vehicle): Control[] {
+  const controls: Control[] = [];
+  const add = (label: string, ...actions: Action[]) => controls.push({ actions, label });
+  switch (v.type) {
+    case 'tank':
+      add('FIRE', 'fireGround');
+      add('TURRET', 'auxLeft', 'auxRight');
+      add('CENTRE TURRET', 'switch');
+      break;
+    case 'asv':
+      add('ROCKETS', 'fireGround');
+      if (world.minesAllowed) add('LAY MINE', 'fireAir');
+      break;
+    case 'heli':
+      add(v.weapon === 'gun' ? 'FIRE GUN' : 'FIRE ROCKETS', 'fireGround');
+      add('STRAFE', 'auxLeft', 'auxRight');
+      add('SWITCH WEAPON', 'switch');
+      break;
+    case 'jeep':
+      add('GRENADE', 'fireGround');
+      add(v.tyresInflated ? 'TYRES DOWN' : 'TYRES UP', 'fireAir');
+      if (world.carriedBy(v)) add('DROP FLAG', 'switch');
+      break;
+  }
+  add('SELF-DESTRUCT', 'fireGround', 'fireAir', 'switch');
+  return controls;
+}
+
+/** The standard pad's button for each action that has one (SPEC §13.2). */
+const PAD_BUTTONS: Partial<Record<Action, string>> = {
+  auxLeft: 'LB',
+  auxRight: 'RB',
+  fireGround: 'A',
+  fireAir: 'B',
+  switch: 'X',
+};
+
+/** The legend: a key cap per control, with what it does. */
+function drawControls(
+  ctx: Ctx,
+  controls: Control[],
+  keys: Bindings,
+  pad: boolean,
+  x: number,
+  y: number,
+): void {
+  const name = (a: Action) => (pad ? (PAD_BUTTONS[a] ?? '?') : keyLabel(keys[a][0]));
+  ctx.save();
+  ctx.font = '11px monospace';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  const rows = controls.map((c) => ({ cap: c.actions.map(name).join('+'), label: c.label }));
+  const capW = Math.max(...rows.map((r) => ctx.measureText(r.cap).width)) + 10;
+  const panelW = capW + Math.max(...rows.map((r) => ctx.measureText(r.label).width)) + 24;
+  ctx.fillStyle = HUD.panel;
+  ctx.strokeStyle = HUD.edge;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.roundRect(x, y, panelW, 96, 6);
+  ctx.fill();
+  ctx.stroke();
+  const step = Math.min(18, 80 / rows.length);
+  rows.forEach((r, i) => {
+    const ry = y + 12 + step * (i + 0.5);
+    ctx.fillStyle = '#2b2d22';
+    ctx.strokeStyle = HUD.edge;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(x + 8, ry - 7, capW, 14, 3);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = HUD.text;
+    ctx.textAlign = 'center';
+    ctx.fillText(r.cap, x + 8 + capW / 2, ry + 1);
+    ctx.fillStyle = HUD.dim;
+    ctx.textAlign = 'left';
+    ctx.fillText(r.label, x + capW + 16, ry + 1);
+  });
+  ctx.restore();
 }
 
 /** A segmented gauge, like a row of indicator lamps. */

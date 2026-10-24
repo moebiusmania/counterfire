@@ -21,7 +21,7 @@
 - Online or network multiplayer. The original was local split-screen only. A netcode-friendly simulation (§4.3) keeps it possible later.
 - Content from *Return Fire 2* or the 3DO-only *Maps O' Death* add-on. The format allows adding these later (§10.4).
 - Shipping any copyrighted original asset, or copying original map layouts (§12).
-- **Music.** v1 ships with sound effects only. The audio system must make it easy to add a music layer later (§11.2).
+- **Orchestral music.** The music is our own short synth arrangements of the original's public-domain classical pieces (§11.2), not orchestral recordings.
 
 ---
 
@@ -124,7 +124,7 @@ The original Windows release asks at start-up for **Training** or **Tournament**
 - Each track lists its maps with a preview chart and the map's facts.
 - Training and two-player maps are always open. Tournament maps open one at a time as the previous one is won.
 - Progress is saved in `localStorage` and survives without it for the session.
-- After a win, Ground Fire goes to the next map; after a loss it tries the same map again. Esc returns to the menu, F3 pauses, and Alt+Enter toggles full screen.
+- After a win, Ground Fire goes to the next map; after a loss it tries the same map again. Esc returns to the menu, F2 turns the music off and on, F3 pauses, and Alt+Enter toggles full screen.
 - **Not yet:** player name entry (§5.1). The players are called P1 and P2.
 
 ### 5.3 Win and loss conditions
@@ -281,6 +281,7 @@ All terrain and structure changes persist for the whole round and appear on the 
 ### 9.2 Bunker screen
 - Shows the underground garage with the four vehicle slots. A vehicle type with no stock left shows an empty slot.
 - **Ground Fire** selects a vehicle. **Air Fire** opens the map.
+- **Up/Down** picks a skin for the highlighted vehicle type: a different model only, behaving exactly the same. The tank has the SV-001 from the Metal Slug series and the M808 Scorpion from Halo; the ASV has the A-Team van; the helicopter has the F-117A stealth fighter; the jeep has a grey 1990s Fiat Panda. (Not in the original.)
 - The elevator animation plays when a vehicle leaves or arrives.
 
 ### 9.3 Map screen (only available in the bunker)
@@ -294,7 +295,7 @@ Shows the nearby area only: your position, enemies, drones and mines.
 
 ### 9.6 Death and victory
 - **Player death:** a laughing skull with laughter audio.
-- **Victory:** a ticker-tape celebration. Make it a new 3D or 2D animated sequence, because the original FMV cannot be shipped. In v1 it has crowd and fireworks sound effects and no music.
+- **Victory:** a ticker-tape celebration. Make it a new 3D or 2D animated sequence, because the original FMV cannot be shipped. It has crowd and fireworks sound effects, and the victory music (§11.2).
 
 ### 9.6a Working assumptions (milestone 6)
 Each choice below is **[VERIFY]** against the original.
@@ -305,11 +306,11 @@ Each choice below is **[VERIFY]** against the original.
 | Radar | Tank and ASV only; the helicopter has none. 10-tile range, north up. It shows the ground, other vehicles (enemy red, friendly green), drones, and every mine (own green, enemy yellow), with a sweep line. |
 | Dashboard | A riveted panel with segmented armour, fuel and ammo gauges, the vehicle's extras, and the radar or the jeep's beacon. |
 | Skull | Drawn in vector, laughing with a chattering jaw while the player waits to return to the bunker after a vehicle is destroyed. An abandoned vehicle shows a message instead. |
-| Victory | Ticker tape over the winner's view, a cheer and fireworks. No music. |
+| Victory | Ticker tape over the winner's view, a cheer, fireworks and the Hallelujah Chorus (§11.2). |
 | Test hook | `?test` exposes the live world as `globalThis.counterfire`, so the smoke test can stage scenes such as the skull and victory. |
 
 ### 9.7 System
-- **Esc** quits to the menu, **F3** pauses, **Alt+Enter** toggles fullscreen (Fullscreen API).
+- **Esc** quits to the menu, **F2** turns the music off and on, **F3** pauses, **Alt+Enter** toggles fullscreen (Fullscreen API).
 
 ---
 
@@ -411,8 +412,19 @@ Flag candidates are every flag tower of each side. A later version could ship th
 ### 11.1 Sound effects (v1)
 Engines for each vehicle, rotor, gunfire, rockets, grenades, explosions, building collapse, soldier screams, the depot bell, the beacon chime, the bunker elevator, the submarine surfacing, the missile, tyre inflation, splashing, the flag-exposed and flag-captured alerts, the victory crowd and fireworks, and the skull laugh. Make them new or use ZzFX/CC0 sources, matching the original's character. Use stereo panning by position (LittleJS spatial audio). In split-screen, pan each sound to the side of the player it belongs to. Never rip the original game's audio.
 
-### 11.2 Music (out of scope for v1)
-v1 has no music. The game emits the events a future music layer will need: `vehicleSelected(type)`, `combatIntensity(0..1)`, `flagExposed`, `flagCaptured`, `victory`, and `death`. The audio module keeps a separate music bus with its own volume setting, which stays empty for now. A music track per vehicle, as in the original, can then be added without touching gameplay code.
+### 11.2 Music
+As in the original, each vehicle has its own classical piece. The compositions are public domain; the original's recordings are not, so the game plays its own short arrangements of the scores (melody, harmony and bass) on a small Web Audio synth, with no audio files. They are written as note lists in `src/audio/score.ts` and played by `src/audio/music.ts` through a music bus of its own.
+
+| When | Piece |
+|---|---|
+| Helicopter in the field | Wagner, *Ride of the Valkyries* |
+| Tank | Holst, *Mars, the Bringer of War* |
+| ASV | Grieg, *In the Hall of the Mountain King* **[VERIFY]**: only one source names it |
+| Jeep | Rimsky-Korsakov, *Flight of the Bumblebee* |
+| Flag captured | Rossini, *William Tell Overture* (the galop), once, then the victory piece |
+| Victory | Handel, *Hallelujah Chorus*, once |
+
+The vehicle pieces loop while that vehicle is out; the bunker, the menu and a loss are silent. In two-player mode the first player with a vehicle out is heard. F2 turns the music off and on, and the choice is remembered.
 
 ---
 
@@ -476,12 +488,15 @@ v1 has no music. The game emits the events a future music layer will need: `vehi
 | Turret / bank left | Q | 7 |
 | Turret / bank right | E | 9 |
 | Self-destruct | H+J+K | −, +, Enter |
-| Quit / Pause / Fullscreen | Esc / F3 / Alt+Enter | |
+| Quit / Music / Pause / Fullscreen | Esc / F2 / F3 / Alt+Enter | |
 
-Players can rebind keys on the title menu's **Controls** screen: pick an action and a player, then press the new key. A key that is already in use, by either player, swaps places with the old one, so no action is ever left without a key. Esc, F3 and Alt can't be bound. Reset to defaults restores this table. Bindings persist in `localStorage`.
+Players can rebind keys on the title menu's **Controls** screen: pick an action and a player, then press the new key. A key that is already in use, by either player, swaps places with the old one, so no action is ever left without a key. Esc, F2, F3 and Alt can't be bound. Reset to defaults restores this table. Bindings persist in `localStorage`.
 
 ### 13.2 Gamepads
-Gamepad 0 plays as P1 and gamepad 1 as P2, alongside the keyboard. The left stick or d-pad drives, the shoulder buttons and triggers turn the turret or bank, A is Ground Fire, B is Air Fire and X is Switch. LittleJS's on-screen gamepad is an optional touch layout. **[VERIFY]** the stick's up direction on real hardware; the mapping is unit-tested only.
+Gamepad 0 plays as P1 and gamepad 1 as P2, alongside the keyboard. The left stick or d-pad drives, the shoulder buttons and triggers turn the turret or bank, A is Ground Fire, B is Air Fire and X is Switch. In the menus either pad moves with the stick or d-pad, chooses with A or Start and goes back with B. **[VERIFY]** the stick's up direction on real hardware; the mapping is unit-tested only.
+
+### 13.3 On-screen controls
+For phones and tablets: a d-pad bottom left and the A, B, X, LB and RB buttons bottom right, an HTML overlay that drives P1 like gamepad 0, menus included. A MENU button in play stands in for Esc, and the dashboards move to the top of the screen. The gamepad button in the menu's top right corner turns them on and off; the choice is remembered, and they start on for a touch screen. **[VERIFY]** on real phones and tablets.
 
 ---
 

@@ -42,6 +42,8 @@ export class Vehicle {
   tyreChange = 1;
   /** ASV: mines left. */
   mines = 0;
+  /** Which of VEHICLE_SKINS the model wears; it changes nothing in the sim. */
+  skin = 0;
 
   // last tick's pose, so the renderer can interpolate
   prevX: number;

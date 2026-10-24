@@ -1,5 +1,5 @@
 // Sound effects (SPEC §11.1), generated with ZzFX so there are no asset files yet.
-// Music is out of scope for v1 (SPEC §11.2).
+// The music is in music.ts (SPEC §11.2).
 // ZzFX parameters: volume, randomness, frequency, attack, sustain, release, shape, shapeCurve,
 // slide, deltaSlide, pitchJump, pitchJumpTime, repeatTime, noise, modulation, bitCrush, delay,
 // sustainVolume, decay, tremolo, filter.

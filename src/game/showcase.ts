@@ -1,9 +1,9 @@
-// `?showcase`: a still line-up of every vehicle, structure, soldier, flag, drone and the submarine
-// beside the P1 bunker, to check the models up close.
+// `?showcase`: a still line-up of every vehicle, each skin behind it, and every structure, soldier, flag,
+// drone and the submarine beside the P1 bunker, to check the models up close.
 
 import type { Level } from '../levels/schema';
 import { Drone } from '../sim/drones';
-import { VEHICLE_ORDER, type World } from '../sim/world';
+import { VEHICLE_ORDER, VEHICLE_SKINS, type World } from '../sim/world';
 
 /** Extra structures to stand in the line-up, added before the world is built. */
 export function addShowcaseStructures(level: Level): void {
@@ -30,6 +30,18 @@ export function parkShowcase(world: World): void {
     v.turret = type === 'tank' ? -0.9 : 0;
     if (type === 'jeep') v.tyresInflated = true;
     if (type === 'heli') v.altitude = 0.3;
+  });
+  // the other skins in a row behind, each under its standard model
+  VEHICLE_ORDER.forEach((type, i) => {
+    VEHICLE_SKINS[type].forEach((_, skin) => {
+      if (!skin) return;
+      const v = world.spawnVehicle('P1', type);
+      v.skin = skin;
+      v.x = bunker.x - 2.4 + i * 1.6;
+      v.y = bunker.y + 2 + skin * 1.6;
+      v.heading = 0.5;
+      if (type === 'heli') v.altitude = 0.3;
+    });
   });
   const p = world.player('P1');
   p.vehicle = undefined;

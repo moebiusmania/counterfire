@@ -22,6 +22,14 @@ export const TICK_RATE = 60;
 /** The bunker's four slots, left to right (SPEC §9.2). */
 export const VEHICLE_ORDER: readonly VehicleType[] = ['tank', 'asv', 'heli', 'jeep'];
 
+/** The looks each vehicle type can wear, chosen with up and down in the bunker. Only the model changes. */
+export const VEHICLE_SKINS: Record<VehicleType, readonly string[]> = {
+  tank: ['standard', 'metal slug', 'scorpion'],
+  asv: ['standard', 'a-team'],
+  heli: ['standard', 'f-117a'],
+  jeep: ['standard', 'panda'],
+};
+
 /** Destroyed vehicles burn this long before the wreck is cleared. */
 const WRECK_TICKS = 180;
 
@@ -75,6 +83,7 @@ export type SimEvent =
   | { type: 'resupply'; vehicle: number; depot: 'fuelDepot' | 'ammoTent' }
   | { type: 'bunkerLight'; vehicle: number; on: boolean }
   | { type: 'selectSlot'; player: PlayerId; slot: number }
+  | { type: 'selectSkin'; player: PlayerId; vehicleType: VehicleType; skin: number }
   | { type: 'stockEmpty'; player: PlayerId; vehicleType: VehicleType }
   | { type: 'deploy'; player: PlayerId; vehicle: number }
   | { type: 'returned'; player: PlayerId; vehicleType: VehicleType }
@@ -104,6 +113,8 @@ export interface PlayerState {
   mode: PlayerMode;
   /** Highlighted bunker slot, an index into VEHICLE_ORDER. */
   selected: number;
+  /** Chosen skin per vehicle type, an index into VEHICLE_SKINS. */
+  skins: Record<VehicleType, number>;
   /** The vehicle in the field, if any. */
   vehicle?: Vehicle;
   /** Ticks left before a player who lost a vehicle is back in the bunker. */
@@ -164,6 +175,7 @@ export class World implements Collider {
         stock,
         mode: 'bunker',
         selected: 0,
+        skins: { tank: 0, asv: 0, heli: 0, jeep: 0 },
         lostTimer: 0,
         prevInput: EMPTY_INPUT,
       });
@@ -369,6 +381,12 @@ export class World implements Collider {
       p.selected = (p.selected + (pressed.right ? 1 : slots - 1)) % slots;
       this.emit({ type: 'selectSlot', player: p.id, slot: p.selected });
     }
+    const type = VEHICLE_ORDER[p.selected] as VehicleType;
+    const skins = VEHICLE_SKINS[type].length;
+    if ((pressed.forward || pressed.back) && skins > 1) {
+      p.skins[type] = (p.skins[type] + (pressed.back ? 1 : skins - 1)) % skins;
+      this.emit({ type: 'selectSkin', player: p.id, vehicleType: type, skin: p.skins[type] });
+    }
     if (pressed.fireGround) this.deploy(p);
   }
 
@@ -381,6 +399,7 @@ export class World implements Collider {
     }
     p.stock[type]--;
     const v = new Vehicle(this.nextId++, type, p.id, p.bunker.x, p.bunker.y, p.bunker.rot ?? 0);
+    v.skin = p.skins[type];
     v.elevator = 1;
     v.elevatorDir = -1;
     this.vehicles.push(v);
@@ -790,7 +809,7 @@ export class World implements Collider {
         .num(p.selected)
         .num(p.lostTimer)
         .num(p.vehicle?.id ?? 0);
-      for (const t of VEHICLE_ORDER) h.num(p.stock[t]);
+      for (const t of VEHICLE_ORDER) h.num(p.stock[t]).num(p.skins[t]);
     }
     for (const v of this.vehicles) {
       h.num(v.id).str(v.state).num(v.x).num(v.y).num(v.heading).num(v.turret).num(v.speed);
@@ -798,7 +817,8 @@ export class World implements Collider {
       h.num(v.rockets)
         .num(v.mines)
         .num(v.tyresInflated ? 1 : 0)
-        .num(v.wreckTicks);
+        .num(v.wreckTicks)
+        .num(v.skin);
     }
     for (const t of this.structures) h.num(t.id).num(t.hp).num(t.aim).num(t.cooldown);
     for (const s of this.soldiers) h.num(s.id).str(s.state).num(s.x).num(s.y).num(s.heading).num(s.timer);

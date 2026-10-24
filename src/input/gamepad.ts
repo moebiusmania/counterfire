@@ -1,11 +1,12 @@
 // Gamepads for both players (SPEC §13.2): left stick or d-pad drives, shoulders turn the turret or
-// bank, A is Ground Fire, B is Air Fire, X is Switch. Gamepad 0 is P1's, gamepad 1 is P2's.
+// bank, A is Ground Fire, B is Air Fire, X is Switch. Gamepad 0 is P1's, gamepad 1 is P2's. In the
+// menus either pad moves with the stick or d-pad, chooses with A or Start and goes back with B.
 
 import { gamepadConnected, gamepadDpad, gamepadIsDown, gamepadStick } from 'littlejsengine';
 import type { InputFrame } from '../sim/types';
 
 /** Standard-mapping button numbers. */
-export const PAD = { a: 0, b: 1, x: 2, y: 3, lb: 4, rb: 5, lt: 6, rt: 7 } as const;
+export const PAD = { a: 0, b: 1, x: 2, y: 3, lb: 4, rb: 5, lt: 6, rt: 7, start: 9 } as const;
 
 /** How far a stick must lean before it counts. */
 export const DEAD_ZONE = 0.35;
@@ -34,14 +35,43 @@ export function padToInput(pad: PadState): InputFrame {
   };
 }
 
-/** Read a connected gamepad, or undefined when there is none at that index. */
-export function readGamepad(index: number): InputFrame | undefined {
-  if (!gamepadConnected(index)) return undefined;
-  return padToInput({
+function padState(index: number): PadState {
+  return {
     stick: gamepadStick(0, index),
     dpad: gamepadDpad(index),
     isDown: (b) => gamepadIsDown(b, index),
-  });
+  };
+}
+
+/** Read a connected gamepad, or undefined when there is none at that index. */
+export function readGamepad(index: number): InputFrame | undefined {
+  return gamepadConnected(index) ? padToInput(padState(index)) : undefined;
+}
+
+export type PadMenuAction = 'up' | 'down' | 'left' | 'right' | 'select' | 'back';
+
+/** Held controls as menu controls: move with the directions, choose with Ground Fire, go back with Air Fire. */
+export function inputToMenu(i: InputFrame): Set<PadMenuAction> {
+  const held = new Set<PadMenuAction>();
+  if (i.forward) held.add('up');
+  if (i.back) held.add('down');
+  if (i.left) held.add('left');
+  if (i.right) held.add('right');
+  if (i.fireGround) held.add('select');
+  if (i.fireAir) held.add('back');
+  return held;
+}
+
+/** What a pad holds, as menu controls, Start choosing too; the menu acts on a control the moment it goes down. */
+export function padToMenu(pad: PadState): Set<PadMenuAction> {
+  const held = inputToMenu(padToInput(pad));
+  if (pad.isDown(PAD.start)) held.add('select');
+  return held;
+}
+
+/** The menu controls a connected gamepad holds, or none when there is no pad at that index. */
+export function readGamepadMenu(index: number): Set<PadMenuAction> {
+  return gamepadConnected(index) ? padToMenu(padState(index)) : new Set();
 }
 
 /** Either source pressing a control presses it. */

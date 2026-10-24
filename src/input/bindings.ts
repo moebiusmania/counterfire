@@ -45,8 +45,8 @@ export const ACTIONS: { action: Action; label: string }[] = [
   { action: 'switch', label: 'SWITCH' },
 ];
 
-/** Keys the game keeps for itself: quit, pause, and the Alt of Alt+Enter. */
-export const RESERVED_KEYS = new Set(['Escape', 'F3', 'AltLeft', 'AltRight']);
+/** Keys the game keeps for itself: quit, music, pause, and the Alt of Alt+Enter. */
+export const RESERVED_KEYS = new Set(['Escape', 'F2', 'F3', 'AltLeft', 'AltRight']);
 
 /**
  * Bind one key to a player's action. Whatever already used that key, for either player, takes the

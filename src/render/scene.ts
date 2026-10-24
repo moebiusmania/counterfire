@@ -18,25 +18,33 @@ import type { Structure } from '../sim/structures';
 import { Tile } from '../sim/terrain';
 import { DRONES, HELI } from '../sim/tuning';
 import type { PlayerId, Team, VehicleType } from '../sim/types';
+import { heliAimPoint } from '../sim/vehicles/heli';
 import type { Vehicle } from '../sim/vehicles/vehicle';
-import type { Shot, SimEvent, World } from '../sim/world';
+import { type Shot, type SimEvent, VEHICLE_SKINS, type World } from '../sim/world';
 import {
+  buildAimMarker,
   buildAsv,
+  buildATeamVan,
   buildBuilding,
   buildBunker,
   buildBunkerLamp,
   buildDepot,
   buildDrone,
+  buildF117,
   buildFlag,
   buildFlagTower,
   buildHeli,
   buildJeep,
+  buildMetalSlug,
   buildMine,
+  buildPanda,
   buildRubble,
+  buildScorpion,
   buildSoldier,
   buildSubmarine,
   buildTank,
   buildTurretParts,
+  type TankMeshes,
 } from './models';
 import { SEA_LEVEL, TerrainView, toWorld } from './terrain';
 import { THEMES } from './themes';
@@ -75,6 +83,7 @@ export class SceneView {
   private readonly soldiers = new Map<number, SoldierView>();
   private readonly soldierMeshes = new Map<string, Mesh>();
   private readonly mineMesh = buildMine();
+  private readonly aimMesh = buildAimMarker();
   private readonly rubbleMesh = buildRubble();
   private readonly sub: EngineObject3D;
   private readonly flags = new Map<Flag, { pole: EngineObject3D; cloth: EngineObject3D }>();
@@ -266,7 +275,7 @@ export class SceneView {
   private syncVehicle(v: Vehicle): void {
     let view = this.vehicles.get(v.id);
     if (!view) {
-      view = buildVehicleView(v.type, v.team, toWorld(v.x, v.y));
+      view = buildVehicleView(v.type, v.team, toWorld(v.x, v.y), v.skin);
       this.vehicles.set(v.id, view);
     }
     let height = -v.elevator * SHAFT_DEPTH;
@@ -319,6 +328,17 @@ export class SceneView {
     for (const s of this.world.shots) drawShot(s);
     for (const m of this.world.minesSeenBy(viewer))
       render3D.drawMesh(this.mineMesh, buildMatrix(toWorld(m.x, m.y)));
+    // where the helicopter's guns or rockets will come down, for its own pilot only
+    const v = this.world.players.get(viewer)?.vehicle;
+    if (v?.type === 'heli' && v.controllable && v.altitude >= 1) {
+      const aim = heliAimPoint(v);
+      const tile = this.world.terrain.at(aim.x, aim.y);
+      const ground = tile === Tile.Deep || tile === Tile.Shallow ? SEA_LEVEL : 0;
+      render3D.drawMesh(
+        this.aimMesh,
+        buildMatrix(toWorld(aim.x, aim.y, ground + 0.03), vec3(0, v.heading, 0)),
+      );
+    }
   }
 
   handleEvents(events: readonly SimEvent[]): void {
@@ -378,6 +398,7 @@ export class SceneView {
           playSfx('select', this.vehiclePos(e.vehicle));
           break;
         case 'selectSlot':
+        case 'selectSkin':
           playSfx('select', this.bunkerPos(e.player));
           break;
         case 'dryFire':
@@ -403,33 +424,46 @@ export class SceneView {
   }
 }
 
+/** The tank's models by skin; any other skin is the standard tank. */
+const TANK_SKINS: Record<string, (team: Team) => TankMeshes> = {
+  'metal slug': buildMetalSlug,
+  scorpion: buildScorpion,
+};
+
 /** A vehicle model put together from its parts: the turret, rotors and wheels as children. */
-export function buildVehicleView(type: VehicleType, team: Team, at: Vector3): VehicleView {
+export function buildVehicleView(type: VehicleType, team: Team, at: Vector3, skin = 0): VehicleView {
   const view = (root: EngineObject3D, shadow: number): VehicleView => {
     root.softShadow = shadow;
     return { root, wheels: [], rotorAngle: 0 };
   };
   switch (type) {
     case 'tank': {
-      const meshes = buildTank(team);
+      const build = TANK_SKINS[VEHICLE_SKINS.tank[skin] ?? ''] ?? buildTank;
+      const meshes = build(team);
       const out = view(new EngineObject3D(at, meshes.hull), 1.2);
       out.turret = new EngineObject3D(vec3(0, 0.31, 0), meshes.turret);
       out.root.addChild(out.turret);
       return out;
     }
-    case 'asv':
-      return view(new EngineObject3D(at, buildAsv(team)), 1.4);
+    case 'asv': {
+      const build = VEHICLE_SKINS.asv[skin] === 'a-team' ? buildATeamVan : buildAsv;
+      return view(new EngineObject3D(at, build(team)), 1.4);
+    }
     case 'heli': {
-      const meshes = buildHeli(team);
+      const meshes = VEHICLE_SKINS.heli[skin] === 'f-117a' ? buildF117(team) : buildHeli(team);
       const out = view(new EngineObject3D(at, meshes.body), 1.6);
-      out.rotor = new EngineObject3D(vec3(0, 0.7, 0), meshes.rotor);
-      out.tailRotor = new EngineObject3D(vec3(0.08, 0.55, 1.25), meshes.tailRotor);
-      out.root.addChild(out.rotor);
-      out.root.addChild(out.tailRotor);
+      if (meshes.rotor) {
+        out.rotor = new EngineObject3D(vec3(0, 0.7, 0), meshes.rotor);
+        out.root.addChild(out.rotor);
+      }
+      if (meshes.tailRotor) {
+        out.tailRotor = new EngineObject3D(vec3(0.045, 0.55, 1.25), meshes.tailRotor);
+        out.root.addChild(out.tailRotor);
+      }
       return out;
     }
     case 'jeep': {
-      const meshes = buildJeep(team);
+      const meshes = VEHICLE_SKINS.jeep[skin] === 'panda' ? buildPanda(team) : buildJeep(team);
       const out = view(new EngineObject3D(at, meshes.body), 0.9);
       for (const [x, z] of [
         [-0.26, -0.27],

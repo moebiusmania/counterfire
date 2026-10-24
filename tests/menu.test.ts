@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { emptyProgress, recordWin, trackIds } from '../src/game/progress';
 import { ACTIONS } from '../src/input/bindings';
-import { initialMenu, menuInput, selectedLevel, TRACKS } from '../src/ui/menu';
+import { cornerButtonAt, initialMenu, menuInput, selectedLevel, TRACKS } from '../src/ui/menu';
 
 test('title: choose a track and open its list', () => {
   let m = initialMenu();
@@ -45,4 +45,11 @@ test('controls: open from the title, move, start capturing, reset and go back', 
   const reset = menuInput({ ...m, row: ACTIONS.length }, 'select', emptyProgress());
   expect(reset.reset).toBe(true);
   expect(menuInput(m, 'back', emptyProgress()).menu.screen).toBe('title');
+});
+
+test('the full screen and touch controls buttons sit in the top right corner', () => {
+  expect(cornerButtonAt(1280, 1240, 36)).toBe('fullscreen');
+  expect(cornerButtonAt(1280, 1190, 36)).toBe('touch');
+  expect(cornerButtonAt(1280, 640, 36)).toBeUndefined();
+  expect(cornerButtonAt(1280, 1240, 120)).toBeUndefined();
 });

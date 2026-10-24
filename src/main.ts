@@ -4,17 +4,21 @@
 // `?level=<id>` plays a level, `?players=2` the first duel, `?showcase` the model line-up (with
 // `&silhouette`, in black from the gameplay camera), `?seed=N` fixes the seed, and `?test` hands the
 // live world to the browser smoke test.
-// In play: Esc goes back to the menu, F3 pauses, Alt+Enter toggles full screen (SPEC §9.7).
-// Shift+Esc opens the engine's debug overlay.
+// In play: Esc goes back to the menu, F3 pauses, Alt+Enter toggles full screen (SPEC §9.7), as does
+// the button in the menu's top right corner.
+// Shift+Esc opens the engine's debug overlay, F2 turns the music off and on.
 
 import {
   debugOverlay,
   engineInit,
   engineObjectsDestroy,
+  gamepadConnected,
   keyIsDown,
   keyWasPressed,
   mainCanvasSize,
   mainContext,
+  mousePosScreen,
+  mouseWasPressed,
   paused,
   Render3DPlugin,
   render3D,
@@ -28,6 +32,8 @@ import {
   setShowSplashScreen,
   vec3,
 } from 'littlejsengine';
+import { musicEnabled, setMusic, setMusicEnabled, updateMusic } from './audio/music';
+import type { TrackName } from './audio/score';
 import { playSfx, setListeners } from './audio/sfx';
 import { CUSTOM_KEY } from './editor/custom';
 import { loadProgress, nextLevel, type Progress, recordWin, saveProgress, trackOf } from './game/progress';
@@ -41,7 +47,8 @@ import {
   rebind,
   saveBindings,
 } from './input/bindings';
-import { mergeInputs, readGamepad } from './input/gamepad';
+import { mergeInputs, readGamepad, readGamepadMenu } from './input/gamepad';
+import { TouchControls } from './input/touch';
 import { defaultLevelId, getLevel } from './levels';
 import type { Level } from './levels/schema';
 import { Hangars } from './render/hangar';
@@ -56,6 +63,7 @@ import { World } from './sim/world';
 import { clearBanners, drawHud, updateBanners } from './ui/hud';
 import {
   CONTROL_PLAYERS,
+  cornerButtonAt,
   drawMenu,
   initialMenu,
   type MenuAction,
@@ -89,6 +97,11 @@ const beacons = new Map<PlayerId, BeaconLight>();
 /** Players looking at the map in their bunker (SPEC §9.3), and last tick's Air Fire for each. */
 const mapOpen = new Set<PlayerId>();
 const lastAir = new Map<PlayerId, boolean>();
+/** Last tick's Ground Fire for each player, keyboard or gamepad, to leave the end screen on a fresh press. */
+const lastGround = new Map<PlayerId, boolean>();
+/** The on-screen controls for phones and tablets; their MENU button asks to leave the game next update. */
+let touch: TouchControls;
+let menuRequested = false;
 /** Players whose camera is in their hangar (SPEC §9.2), to snap it back to the field on the way out. */
 const indoors = new Set<PlayerId>();
 
@@ -109,6 +122,9 @@ function gameInit() {
   setDebugWatermark(false);
   setInputWASDEmulateDirection(false);
   setCanvasClearColor(rgb(0.15, 0.4, 0.55));
+  touch = new TouchControls(() => {
+    menuRequested = true;
+  });
 
   split = new SplitScreen(); // before the 3D plugin, see render/views.ts
   new Render3DPlugin();
@@ -131,6 +147,8 @@ function readInputs(): Partial<Record<PlayerId, InputFrame>> {
   const inputs: Partial<Record<PlayerId, InputFrame>> = {};
   players.forEach((p, i) => {
     inputs[p] = mergeInputs(readInput(bindings[p]), readGamepad(i));
+    // the on-screen controls are P1's
+    if (i === 0 && touch.enabled) inputs[p] = mergeInputs(inputs[p], touch.read());
   });
   return inputs;
 }
@@ -152,6 +170,7 @@ function startLevel(id: string, seed: number) {
     const input = held[p];
     if (input) world.player(p).prevInput = input;
     lastAir.set(p, input?.fireAir ?? false);
+    lastGround.set(p, input?.fireGround ?? false);
   }
   if (showcase) parkShowcase(world);
   const theme = THEMES[world.level.theme];
@@ -182,6 +201,7 @@ function play(id: string) {
 
 function backToMenu() {
   inMenu = true;
+  padsHeld = menuPads(); // the button that ended the game is not a menu choice
   setPaused(false);
   const id = selectedLevel(menu) ?? world.level.id;
   startLevel(id, 1);
@@ -189,8 +209,24 @@ function backToMenu() {
 
 // --- the menu ---
 
-/** One press of a menu control, from P1's keys, the arrows, Enter/Escape or the first gamepad. */
-function menuAction(): MenuAction | undefined {
+/** What each gamepad and the on-screen controls held in the menu last frame, so a press counts once. */
+let padsHeld: Set<MenuAction>[] = [];
+
+function menuPads(): Set<MenuAction>[] {
+  return [readGamepadMenu(0), readGamepadMenu(1), touch.readMenu()];
+}
+
+/** A control that went down on either gamepad or the on-screen controls since last frame. */
+function padMenuAction(): MenuAction | undefined {
+  const before = padsHeld;
+  padsHeld = menuPads();
+  for (const [i, held] of padsHeld.entries()) for (const a of held) if (!before[i]?.has(a)) return a;
+  return undefined;
+}
+
+/** One press of a menu control, from P1's keys, the arrows, Enter/Escape or either gamepad. */
+function menuAction(pad: MenuAction | undefined): MenuAction | undefined {
+  if (pad) return pad;
   const k = bindings.P1;
   const any = (codes: string[]) => codes.some((c) => keyWasPressed(c));
   if (any([...k.forward, 'ArrowUp'])) return 'up';
@@ -214,8 +250,12 @@ document.addEventListener('keydown', (e) => {
 });
 
 function updateMenu() {
+  const corner = mouseWasPressed(0) && cornerButtonAt(mainCanvasSize.x, mousePosScreen.x, mousePosScreen.y);
+  if (corner === 'fullscreen') toggleFullscreen();
+  if (corner === 'touch') touch.toggle();
   const key = pressedKey;
   pressedKey = undefined;
+  const pad = padMenuAction();
   if (menu.capturing) {
     if (!key) return;
     const action = ACTIONS[menu.row]?.action;
@@ -228,7 +268,7 @@ function updateMenu() {
     playSfx('select');
     return;
   }
-  const action = menuAction();
+  const action = menuAction(pad);
   if (!action) return;
   const before = selectedLevel(menu);
   const { menu: next, start, reset } = menuInput(menu, action, progress);
@@ -251,7 +291,9 @@ function gameUpdate() {
     updateMenu();
     return;
   }
-  if (keyWasPressed('Escape') && !shiftEscape && !directLevel) {
+  const leave = menuRequested || (keyWasPressed('Escape') && !shiftEscape);
+  menuRequested = false;
+  if (leave && !directLevel) {
     backToMenu();
     return;
   }
@@ -275,10 +317,10 @@ function gameUpdate() {
   chimeBeacons();
   celebrate();
 
+  const fresh = players.some((p) => inputs[p]?.fireGround && !lastGround.get(p));
+  for (const p of players) lastGround.set(p, inputs[p]?.fireGround ?? false);
   const o = world.outcome;
-  if (o && world.tick - o.tick > GAME_OVER_TICKS) {
-    if (players.some((p) => bindings[p].fireGround.some((k) => keyWasPressed(k)))) afterGame();
-  }
+  if (o && world.tick - o.tick > GAME_OVER_TICKS && fresh) afterGame();
 }
 
 /** What Ground Fire does at the end: the next map after a win, the same map again otherwise. */
@@ -329,18 +371,47 @@ function chimeBeacons() {
   }
 }
 
+/** What should be playing (SPEC §11.2): the piece of the vehicle out in the field, the galop for a
+ * captured flag and the chorus for a win; nothing in the bunker, the menu, or after a loss. */
+function wantedMusic(): TrackName | undefined {
+  if (inMenu || showcase) return undefined;
+  const o = world.outcome;
+  if (o) {
+    if (o.winner === 'CPU' || o.winner === 'draw') return undefined;
+    return o.reason === 'flagCaptured' ? 'flagCaptured' : 'victory';
+  }
+  // two players share the speakers: the first with a vehicle out is heard
+  for (const p of players) {
+    const v = world.players.get(p)?.vehicle;
+    if (v?.state === 'active') return v.type;
+  }
+  return undefined;
+}
+
+/** When the music was last switched off or on, to show it for a moment. */
+let musicToggledAt = Number.NEGATIVE_INFINITY;
+
 /** System keys work even while paused. */
 function systemKeys() {
+  if (keyWasPressed('F2')) {
+    setMusicEnabled(!musicEnabled());
+    musicToggledAt = performance.now();
+  }
   if (keyWasPressed('Escape') && shiftEscape) setDebugOverlay(!debugOverlay);
   if (keyWasPressed('F3') && !inMenu) setPaused(!paused);
-  if (keyWasPressed('Enter') && (keyIsDown('AltLeft') || keyIsDown('AltRight'))) {
-    if (document.fullscreenElement) void document.exitFullscreen();
-    else void document.documentElement.requestFullscreen?.();
-  }
+  if (keyWasPressed('Enter') && (keyIsDown('AltLeft') || keyIsDown('AltRight'))) toggleFullscreen();
+}
+
+function toggleFullscreen() {
+  if (document.fullscreenElement) void document.exitFullscreen();
+  else void document.documentElement.requestFullscreen?.();
 }
 
 function gameUpdatePost() {
   systemKeys();
+  touch.show(!showcase, !inMenu && !directLevel);
+  setMusic(wantedMusic());
+  updateMusic();
   scene.sync();
   if (showcase) {
     const b = world.player('P1').bunker;
@@ -392,13 +463,30 @@ function gameRender() {
 function gameRenderPost() {
   if (showcase) return;
   if (inMenu) {
-    drawMenu(mainContext, menu, progress, bindings, mainCanvasSize.x, mainCanvasSize.y);
+    drawMenu(mainContext, menu, progress, bindings, mainCanvasSize.x, mainCanvasSize.y, {
+      fullscreen: !!document.fullscreenElement,
+      touch: touch.enabled,
+      hover: cornerButtonAt(mainCanvasSize.x, mousePosScreen.x, mousePosScreen.y),
+    });
+    drawMusicNotice();
     return;
   }
-  drawHud(world, bindings, mapOpen, endHint(), (p, area) => {
-    const view = split.views[players.indexOf(p)];
-    return view ? hangars.captionPoints(p).map((pt) => view.toScreen(pt, area)) : [];
-  });
+  drawHud(
+    world,
+    bindings,
+    mapOpen,
+    endHint(),
+    (p, area) => {
+      const view = split.views[players.indexOf(p)];
+      return view ? hangars.captionPoints(p).map((pt) => view.toScreen(pt, area)) : [];
+    },
+    {
+      // the on-screen controls carry the gamepad's button names
+      pads: new Set(players.filter((_, i) => gamepadConnected(i) || (i === 0 && touch.enabled))),
+      // and the thumbs cover the bottom corners, so the dashboards go to the top
+      dashboardTop: touch.enabled,
+    },
+  );
   if (paused) {
     const ctx = mainContext;
     ctx.save();
@@ -410,6 +498,23 @@ function gameRenderPost() {
     ctx.fillText('PAUSED - F3', mainCanvasSize.x / 2, mainCanvasSize.y / 2);
     ctx.restore();
   }
+  drawMusicNotice();
+}
+
+/** "MUSIC ON" or "MUSIC OFF" in the corner for a moment after F2. */
+function drawMusicNotice() {
+  const t = (performance.now() - musicToggledAt) / 1000;
+  if (t > 1.5) return;
+  const ctx = mainContext;
+  ctx.save();
+  ctx.globalAlpha = Math.min(1, (1.5 - t) * 2);
+  ctx.font = 'bold 16px monospace';
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#000';
+  ctx.fillText(musicEnabled() ? 'MUSIC ON - F2' : 'MUSIC OFF - F2', mainCanvasSize.x - 14, 30);
+  ctx.fillStyle = '#fff';
+  ctx.fillText(musicEnabled() ? 'MUSIC ON - F2' : 'MUSIC OFF - F2', mainCanvasSize.x - 16, 28);
+  ctx.restore();
 }
 
 engineInit(gameInit, gameUpdate, gameUpdatePost, gameRender, gameRenderPost);

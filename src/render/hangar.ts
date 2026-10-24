@@ -14,7 +14,7 @@ import {
   type Vector3,
   vec3,
 } from 'littlejsengine';
-import type { PlayerId } from '../sim/types';
+import type { PlayerId, VehicleType } from '../sim/types';
 import { type PlayerState, VEHICLE_ORDER, type World } from '../sim/world';
 import {
   buildBayLamp,
@@ -47,6 +47,8 @@ interface Bay {
   platform: EngineObject3D;
   piston: EngineObject3D;
   vehicle: VehicleView;
+  /** The skin the vehicle was built with, to rebuild it when the player picks another. */
+  skin: number;
   lamp: EngineObject3D;
 }
 
@@ -70,6 +72,12 @@ const INDOOR: Omit<Lighting, 'shadowLight'> = {
   ambient: rgb(0.17, 0.17, 0.19),
   ground: rgb(0.06, 0.05, 0.05),
 };
+
+function parkedView(type: VehicleType, player: PlayerId, at: Vector3, skin: number): VehicleView {
+  const view = buildVehicleView(type, player, at, skin);
+  view.root.softShadow = 0; // a blob would land on the field above
+  return view;
+}
 
 /** The platform on its way up or down, while the hangar is still in view. */
 function transit(p: PlayerState): { bay: number; rise: number } | undefined {
@@ -100,14 +108,13 @@ export class Hangars {
       const pistonMesh = buildHangarPiston();
       const lampMesh = buildBayLamp();
       const bays = VEHICLE_ORDER.map((type, i): Bay => {
-        const vehicle = buildVehicleView(type, p.id, origin);
-        vehicle.root.softShadow = 0; // a blob would land on the field above
         const lamp = new EngineObject3D(origin.add(vec3(hangarBayX(i), 1.6, HANGAR.back + 0.03)), lampMesh);
         lamp.emissive = 1;
         return {
           platform: new EngineObject3D(origin, platformMesh),
           piston: new EngineObject3D(origin, pistonMesh),
-          vehicle,
+          vehicle: parkedView(type, p.id, origin, p.skins[type]),
+          skin: p.skins[type],
           lamp,
         };
       });
@@ -141,8 +148,13 @@ export class Hangars {
       g.spotX += (hangarBayX(target) - g.spotX) * SPOT_RATE;
       g.bays.forEach((bay, i) => {
         const x = hangarBayX(i);
-        const type = VEHICLE_ORDER[i];
-        const stocked = type !== undefined && p.stock[type] > 0;
+        const type = VEHICLE_ORDER[i] as VehicleType;
+        const stocked = p.stock[type] > 0;
+        if (bay.skin !== p.skins[type]) {
+          bay.vehicle.root.destroy();
+          bay.vehicle = parkedView(type, id, g.origin, p.skins[type]);
+          bay.skin = p.skins[type];
+        }
         const rise = moving?.bay === i ? moving.rise : 0;
         const at = g.origin.add(vec3(x, rise, 0));
         bay.platform.pos3D = at;

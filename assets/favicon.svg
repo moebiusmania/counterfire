@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- a tank seen from above, in the gunsight -->
+  <rect width="64" height="64" rx="12" fill="#10232d"/>
+  <rect x="21" y="18" width="7" height="30" rx="2" fill="#1e1f18"/>
+  <rect x="36" y="18" width="7" height="30" rx="2" fill="#1e1f18"/>
+  <rect x="24" y="21" width="16" height="25" rx="3" fill="#56603a"/>
+  <circle cx="32" cy="35" r="6" fill="#6b7747"/>
+  <rect x="30.5" y="12" width="3" height="20" rx="1" fill="#6b7747"/>
+  <circle cx="32" cy="32" r="21" fill="none" stroke="#e8d23a" stroke-width="4"/>
+  <path d="M32 4v10M32 50v10M4 32h10M50 32h10" stroke="#e8d23a" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="32" cy="32" r="3" fill="#d8473a"/>
+</svg>
