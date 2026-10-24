@@ -1,4 +1,4 @@
-// Generate the shipped level set (SPEC §10.2) and the catalog that imports it.
+// Generate the shipped level set (SPEC §10.2), the bonus maps, and the catalog that imports it.
 //
 //   bun tools/build-levels.ts
 //
@@ -87,6 +87,38 @@ const TRAINING: GenSpec[] = [
   },
 ];
 
+/** Bonus maps (not in the original): one for each of the city, old west and alien themes. */
+const BONUS: GenSpec[] = [
+  {
+    id: 'bonus-city',
+    name: 'Downtown Gridlock',
+    mode: 'bonus',
+    theme: 'city',
+    layout: 'chessboard',
+    seed: 7001,
+    tier: 4,
+    targets: 4,
+  },
+  {
+    id: 'bonus-western',
+    name: "Dead Man's Gulch",
+    mode: 'bonus',
+    theme: 'western',
+    seed: 7002,
+    tier: 4,
+    lakes: 1,
+  },
+  {
+    id: 'bonus-alien',
+    name: 'Xenon Crater',
+    mode: 'bonus',
+    theme: 'alien',
+    layout: 'atoll',
+    seed: 7003,
+    tier: 5,
+  },
+];
+
 const ADJECTIVES = [
   'Iron',
   'Silent',
@@ -143,7 +175,11 @@ const NOUNS = [
 /** Unique two-word names, the same every run. */
 function nameMaker(seed: number) {
   const rng = new Rng(seed);
-  const used = new Set<string>(['First Tracks', 'Twin Bridges', ...TRAINING.map((t) => t.name)]);
+  const used = new Set<string>([
+    'First Tracks',
+    'Twin Bridges',
+    ...[...TRAINING, ...BONUS].map((t) => t.name),
+  ]);
   return () => {
     for (;;) {
       const name = `${ADJECTIVES[rng.int(ADJECTIVES.length)]} ${NOUNS[rng.int(NOUNS.length)]}`;
@@ -199,6 +235,7 @@ if (import.meta.main) {
     ...TRAINING.map((s) => [s, generateLevel] as [GenSpec, (s: GenSpec) => Level]),
     ...tournament(name).map((s) => [s, generateLevel] as [GenSpec, (s: GenSpec) => Level]),
     ...duels(name).map((s) => [s, generateDuel] as [GenSpec, (s: GenSpec) => Level]),
+    ...BONUS.map((s) => [s, generateLevel] as [GenSpec, (s: GenSpec) => Level]),
   ];
   const ids = ['training-01'];
   for (const [spec, make] of specs) {
@@ -208,8 +245,9 @@ if (import.meta.main) {
   }
   ids.push('duel-01');
 
-  // the catalog: every level in play order, training, tournament, then duels
-  const order = (id: string) => (id.startsWith('training') ? 0 : id.startsWith('t') ? 1 : 2);
+  // the catalog: every level in play order, training, tournament, duels, then bonus maps
+  const order = (id: string) =>
+    id.startsWith('training') ? 0 : id.startsWith('t') ? 1 : id.startsWith('bonus') ? 3 : 2;
   const sorted = ids.sort((a, b) => order(a) - order(b) || a.localeCompare(b, 'en', { numeric: true }));
   const ident = (id: string) => `l_${id.replace(/-/g, '_')}`;
   const lines = [

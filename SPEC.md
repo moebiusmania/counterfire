@@ -120,9 +120,9 @@ The original Windows release asks at start-up for **Training** or **Tournament**
 - **Two player:** split-screen on one machine. Each player has a bunker, a flag hidden in one of their own flag buildings, and their own vehicle stock. Each player tries to capture the other's flag. Turrets belong to either side.
 
 ### 5.2a Campaign flow (milestone 7)
-- The title menu offers TRAINING, TOURNAMENT and TWO PLAYERS over a circling view of the selected map.
+- The title menu offers TRAINING, TOURNAMENT, TWO PLAYERS and BONUS over a circling view of the selected map.
 - Each track lists its maps with a preview chart and the map's facts.
-- Training and two-player maps are always open. Tournament maps open one at a time as the previous one is won.
+- Training, two-player and bonus maps are always open. Tournament maps open one at a time as the previous one is won.
 - Progress is saved in `localStorage` and survives without it for the session.
 - After a win, Ground Fire goes to the next map; after a loss it tries the same map again. Esc returns to the menu, F2 turns the music off and on, F3 pauses, and Alt+Enter toggles full screen.
 - **Not yet:** player name entry (§5.1). The players are called P1 and P2.
@@ -328,7 +328,8 @@ The levels are **new, hand-made maps that resemble the original's**. A player of
   - more deep water and fewer bridges, so the routes are longer;
   - fewer depots placed further from the bunker.
 - **Two-player:** 12 maps, symmetric or deliberately balanced, each player with their own bunker and flag-tower cluster.
-- The total is 72 maps for v1. The count can grow because levels are data-only (§10.4).
+- **Bonus:** 3 one-player maps outside the tournament, one per extra theme: "Downtown Gridlock" (city, a chessboard of blocks and canals), "Dead Man's Gulch" (old west) and "Xenon Crater" (an alien atoll). (Not in the original.)
+- The total is 72 maps for v1, plus the bonus maps. The count can grow because levels are data-only (§10.4).
 
 ### 10.3 Design rules (to match the original's feel)
 Every map must:
@@ -340,7 +341,7 @@ Every map must:
 6. Use **forests and brush** as cover that blocks the way and can be cleared with grenades or gunfire.
 7. Include at least one **bridge** that is critical to the route, so that destroying or mining it matters.
 8. Have at least one jeep route from the bunker to every flag candidate and back that works with the starting stock. The validator checks this.
-9. Use one of several visual themes in the original's spirit: temperate grassland, desert, snow and winter, and a few novelty layouts such as a chessboard island or letters spelled in land.
+9. Use one of several visual themes in the original's spirit: temperate grassland, desert, snow and winter, and a few novelty layouts such as a chessboard island or letters spelled in land. Beyond the original there are also a city (pavement, asphalt, park trees, tower blocks), the old west (red dust, cacti, saloons) and an alien world (violet ground, green seas, glowing mushrooms, dome pods).
 
 Every map goes through a **playtest review** for readability, fairness and difficulty against its tier.
 
@@ -356,8 +357,8 @@ interface Level {
   id: string;                 // "t01-03"
   name: string;               // new map name
   tier?: number;              // 1–9 for tournament maps
-  theme: "temperate" | "desert" | "winter" | "novelty";
-  mode: "training" | "tournament";
+  theme: "temperate" | "desert" | "winter" | "city" | "western" | "alien" | "novelty";
+  mode: "training" | "tournament" | "bonus";
   players: 1 | 2 | "both";
   size: { w: number; h: number };       // tiles
   tiles: string[];            // terrain rows, north first, one character per tile (see src/sim/terrain.ts)
@@ -391,6 +392,7 @@ Two-player maps are point-symmetric so both sides are equal. The designer draws 
   Tier rules (`tierCounts`, `tierStock`) raise towers, turrets, drones and lakes and lower depots and stock as the tier rises. From tier 7 some maps have no bridges, so the compound is left to the helicopter and an amphibious jeep. Duels build the southern half and mirror it, with bridges in mirrored pairs so each span joins up.
 - `bun tools/build-levels.ts` regenerates the whole set from fixed seeds: training-02 to 06 (one lesson each), t1-1 to t9-6, and duel-02 to 12, plus `src/levels/catalog.ts`. training-01 and duel-01 are hand-made.
   - Themes per tier slot: temperate, temperate, desert, winter, temperate, novelty.
+  - bonus-city, bonus-western and bonus-alien come from fixed seeds too. In those themes the neutral village is built of tower blocks, saloons or alien pods (building variants `tower`, `saloon`, `pod`, also in the editor).
   - To hand-tune a map, edit it in the editor and take its id off the generated list.
 - Tests check every map: valid, deterministic, harder by tier, a fuel depot near each bunker, land access to the compound on early tiers, unique names, every theme used.
 

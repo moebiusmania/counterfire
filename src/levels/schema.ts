@@ -27,10 +27,11 @@ export type Stock = Record<VehicleType, number>;
 export interface Level {
   id: string;
   name: string;
-  mode: 'training' | 'tournament';
+  /** Bonus maps are one-player maps outside the tournament, always open. */
+  mode: 'training' | 'tournament' | 'bonus';
   players: 1 | 2 | 'both';
   tier?: number;
-  theme: 'temperate' | 'desert' | 'winter' | 'novelty';
+  theme: 'temperate' | 'desert' | 'winter' | 'city' | 'western' | 'alien' | 'novelty';
   /** Terrain rows, north first; one character per tile (see sim/terrain.ts). */
   tiles: string[];
   entities: LevelEntity[];

@@ -1,4 +1,4 @@
-// The title menu and level lists (SPEC §5.1): pick Training, Tournament or Two Players, then a
+// The title menu and level lists (SPEC §5.1): pick Training, Tournament, Two Players or Bonus, then a
 // map. Locked tournament maps open as the one before is won. Controls rebinds keys (SPEC §13.1).
 
 import { isUnlocked, type Progress, type Track, trackIds } from '../game/progress';
@@ -31,6 +31,7 @@ export const TRACKS: { track: Track; label: string; blurb: string }[] = [
   { track: 'training', label: 'TRAINING', blurb: 'Six lessons, one for each skill' },
   { track: 'tournament', label: 'TOURNAMENT', blurb: 'Nine tiers of six maps against the CPU' },
   { track: 'duel', label: 'TWO PLAYERS', blurb: 'Split-screen battles on mirrored maps' },
+  { track: 'bonus', label: 'BONUS', blurb: 'A city, the old west and an alien world' },
 ];
 
 export function initialMenu(): MenuState {
@@ -209,7 +210,7 @@ export function drawMenu(
 
 function drawTitle(ctx: Ctx, m: MenuState, w: number, h: number): void {
   [...TRACKS, { label: 'CONTROLS', blurb: 'Change the keys for each player' }].forEach((t, i) => {
-    const y = h * 0.42 + i * 64;
+    const y = h * 0.34 + i * 62;
     const on = i === m.item;
     ctx.fillStyle = on ? 'rgba(74, 90, 42, .9)' : 'rgba(20, 24, 16, .8)';
     ctx.fillRect(w / 2 - 210, y - 26, 420, 52);
@@ -225,7 +226,7 @@ function drawTitle(ctx: Ctx, m: MenuState, w: number, h: number): void {
   });
   ctx.font = '14px monospace';
   ctx.fillStyle = HUD.dim;
-  ctx.fillText('W/S or arrows choose   H or Enter select', w / 2, h * 0.42 + (TRACKS.length + 1) * 64 + 20);
+  ctx.fillText('W/S or arrows choose   H or Enter select', w / 2, h * 0.34 + (TRACKS.length + 1) * 62 + 20);
 }
 
 function drawControls(

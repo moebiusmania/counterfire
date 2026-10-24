@@ -70,22 +70,25 @@ describe('generator', () => {
 });
 
 describe('shipped set (SPEC §10.2)', () => {
-  test('6 training maps, 54 tournament maps in 9 tiers of 6, 12 two-player maps', () => {
+  test('6 training maps, 54 tournament maps in 9 tiers of 6, 12 two-player maps, 3 bonus maps', () => {
     expect(track('training').length).toBe(6);
     const tournament = track('tournament');
     expect(tournament.length).toBe(54);
     for (let tier = 1; tier <= 9; tier++) expect(tournament.filter((l) => l.tier === tier).length).toBe(6);
     expect(track('duel').length).toBe(12);
+    expect(track('bonus').map((l) => l.theme)).toEqual(['alien', 'city', 'western']);
   });
 
   test('every map has a unique name and themes vary', () => {
-    const all = [...track('training'), ...track('tournament'), ...track('duel')];
+    const all = [...track('training'), ...track('tournament'), ...track('duel'), ...track('bonus')];
     expect(new Set(all.map((l) => l.name)).size).toBe(all.length);
-    expect(new Set(all.map((l) => l.theme))).toEqual(new Set(['temperate', 'desert', 'winter', 'novelty']));
+    expect(new Set(all.map((l) => l.theme))).toEqual(
+      new Set(['temperate', 'desert', 'winter', 'city', 'western', 'alien', 'novelty']),
+    );
   });
 
   test('every map has a fuel depot within reach of the P1 bunker', () => {
-    for (const level of [...track('training'), ...track('tournament'), ...track('duel')]) {
+    for (const level of [...track('training'), ...track('tournament'), ...track('duel'), ...track('bonus')]) {
       const bunker = level.entities.find((e) => e.type === 'bunker');
       const fuel = level.entities.filter((e) => e.type === 'fuelDepot' && e.team === bunker?.team);
       if (!bunker) throw new Error(level.id);

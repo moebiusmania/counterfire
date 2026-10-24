@@ -6,7 +6,7 @@ import type { Level } from './schema';
 
 export const LEVELS: Readonly<Record<string, Level>> = Object.fromEntries(CATALOG.map((l) => [l.id, l]));
 
-/** Ids in play order: training, the tournament tier by tier, then two-player maps. */
+/** Ids in play order: training, the tournament tier by tier, two-player maps, then bonus maps. */
 export const LEVEL_ORDER: readonly string[] = CATALOG.map((l) => l.id);
 
 /** A level by id, as a fresh copy the game may change. */
@@ -21,6 +21,6 @@ export function defaultLevelId(players: 1 | 2): string {
 }
 
 /** The levels of one campaign track, in order. */
-export function track(kind: 'training' | 'tournament' | 'duel'): Level[] {
+export function track(kind: 'training' | 'tournament' | 'duel' | 'bonus'): Level[] {
   return CATALOG.filter((l) => (kind === 'duel' ? l.players === 2 : l.players !== 2 && l.mode === kind));
 }

@@ -1,9 +1,9 @@
-// Campaign progress (SPEC §5.2): which maps are won, and which are open to play. Training and
+// Campaign progress (SPEC §5.2): which maps are won, and which are open to play. Training, bonus and
 // two-player maps are always open; the tournament opens one map at a time, in order.
 
 import { track } from '../levels';
 
-export type Track = 'training' | 'tournament' | 'duel';
+export type Track = 'training' | 'tournament' | 'duel' | 'bonus';
 
 export interface Progress {
   /** Ids of maps the player has won. */
@@ -66,5 +66,6 @@ export function nextLevel(t: Track, id: string): string | undefined {
 export function trackOf(id: string): Track {
   if (trackIds('training').includes(id)) return 'training';
   if (trackIds('duel').includes(id)) return 'duel';
+  if (trackIds('bonus').includes(id)) return 'bonus';
   return 'tournament';
 }

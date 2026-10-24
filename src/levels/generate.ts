@@ -471,7 +471,7 @@ function buildOnePlayer(spec: GenSpec, seed: number): Level {
   forests(
     g,
     rng,
-    spec.theme === 'desert' ? 3 : 6 + rng.int(4),
+    spec.theme === 'desert' || spec.theme === 'western' ? 3 : spec.theme === 'city' ? 4 : 6 + rng.int(4),
     (c, r) =>
       onRoute.has(r * w + c) ||
       near([c, r], bunker) < 4 ||
@@ -487,7 +487,7 @@ function buildOnePlayer(spec: GenSpec, seed: number): Level {
   place.place(bunker[0], bunker[1], { id: 'p1-bunker', type: 'bunker', team: 'P1', rot: 0 });
 
   placeDepots(g, place, routes[0] ?? [], bunker, counts.depots, 'P1');
-  placeTargets(g, place, bunker, spec.targets ?? 0);
+  placeTargets(g, place, bunker, spec.targets ?? 0, spec.theme);
 
   // flag towers: most inside the compounds, the rest out in the north where a land vehicle can get
   const towerIds: string[] = [];
@@ -530,7 +530,7 @@ function buildOnePlayer(spec: GenSpec, seed: number): Level {
       0,
     );
   }
-  placeTown(g, rng, place, routes[0] ?? [], bunker);
+  placeTown(g, rng, place, routes[0] ?? [], bunker, spec.theme);
 
   const inset = spec.boundsInset ?? 0;
   return {
@@ -587,10 +587,17 @@ function placeDepots(
 }
 
 /** Neutral buildings round the bunker, for the turret lesson. */
-function placeTargets(g: Grid, place: Placer, home: [number, number], count: number): void {
+function placeTargets(
+  g: Grid,
+  place: Placer,
+  home: [number, number],
+  count: number,
+  theme: Level['theme'],
+): void {
   const ring = cellsWhere(g, (c, r) => near([c, r], home) >= 3 && near([c, r], home) <= 6);
+  const variant = TOWN_LOOK[theme]?.house ?? 'house';
   for (let i = 0; i < count; i++)
-    place.placeAny(ring, { id: `target-${i + 1}`, type: 'building', team: 'NEUTRAL', variant: 'house' });
+    place.placeAny(ring, { id: `target-${i + 1}`, type: 'building', team: 'NEUTRAL', variant });
 }
 
 /** A neutral village somewhere along the road. */
@@ -600,16 +607,26 @@ function placeTown(
   place: Placer,
   route: [number, number][],
   home: [number, number],
+  theme: Level['theme'],
 ): void {
   const middle = route[Math.floor(route.length * rng.range(0.3, 0.6))];
   if (!middle) return;
   const spots = cellsWhere(g, (c, r) => near([c, r], middle) < 4 && near([c, r], home) > 5);
-  const houses = 2 + rng.int(3);
+  // a city is built up more than a village
+  const houses = 2 + rng.int(3) + (theme === 'city' ? 4 : 0);
+  const look = TOWN_LOOK[theme];
   for (let i = 0; i < houses; i++) {
-    const variant = rng.next() < 0.2 ? 'hangar' : 'house';
+    const variant = rng.next() < 0.2 ? (look?.hangar ?? 'hangar') : (look?.house ?? 'house');
     place.placeAny(spots, { id: `town-${i + 1}`, type: 'building', team: 'NEUTRAL', variant });
   }
 }
+
+/** The village buildings of the themes that have their own, in place of the house and the hangar. */
+const TOWN_LOOK: Partial<Record<Level['theme'], { house: string; hangar: string }>> = {
+  city: { house: 'tower', hangar: 'house' },
+  western: { house: 'saloon', hangar: 'house' },
+  alien: { house: 'pod', hangar: 'hangar' },
+};
 
 // --- two-player maps (SPEC §10.2: symmetric) ---
 
@@ -708,7 +725,7 @@ function buildDuel(spec: GenSpec, seed: number): Level {
       rot: 0,
     });
   }
-  placeTown(full, rng, place, (routes[0] ?? []).map(at), at(bunker));
+  placeTown(full, rng, place, (routes[0] ?? []).map(at), at(bunker), spec.theme);
 
   const half = {
     id: spec.id,

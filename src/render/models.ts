@@ -840,6 +840,60 @@ export function buildBuilding(variant: string | undefined, team: Team): Mesh {
         );
       break;
     }
+    case 'tower': {
+      // a city tower block: rows of windows all round, a stair hut and a water tank on the roof
+      m.combine(buildBox(vec3(0.8, 1.1, 0.74), 0.02), vec3(0, 0.55, 0), rgb(0.6, 0.6, 0.62));
+      for (let row = 0; row < 4; row++) {
+        const y = 0.3 + row * 0.24;
+        for (const end of [-1, 1]) {
+          for (const x of [-0.25, 0, 0.25])
+            if (row || end > 0 || x)
+              m.combine(buildBox(vec3(0.13, 0.12, 0.02)), vec3(x, y, end * 0.375), WINDOW);
+          for (const z of [-0.18, 0.18])
+            m.combine(buildBox(vec3(0.02, 0.12, 0.13)), vec3(end * 0.405, y, z), WINDOW);
+        }
+      }
+      m.combine(buildBox(vec3(0.2, 0.24, 0.02)), vec3(0, 0.12, -0.375), DARK); // door
+      m.combine(buildBox(vec3(0.84, 0.04, 0.78)), vec3(0, 1.12, 0), DARK); // parapet
+      m.combine(buildBox(vec3(0.26, 0.14, 0.24)), vec3(-0.2, 1.21, -0.12), roof); // stair hut
+      m.combine(buildCylinder(0.2, 0.18, 8), vec3(0.2, 1.3, 0.15), rgb(0.45, 0.32, 0.22)); // water tank
+      for (const x of [0.13, 0.27]) m.combine(buildBox(vec3(0.02, 0.1, 0.02)), vec3(x, 1.17, 0.15), STEEL);
+      break;
+    }
+    case 'saloon': {
+      // an old west saloon: a plank building behind a tall false front, a porch and swinging doors
+      const plank = rgb(0.55, 0.38, 0.22);
+      m.combine(buildBox(vec3(0.8, 0.5, 0.62), 0.01), vec3(0, 0.25, 0.02), plank);
+      m.combine(buildBox(vec3(0.82, 0.03, 0.64)), vec3(0, 0.51, 0.02), roof);
+      m.combine(buildBox(vec3(0.86, 0.34, 0.03)), vec3(0, 0.64, -0.3), rgb(0.66, 0.48, 0.3)); // false front
+      m.combine(buildBox(vec3(0.54, 0.1, 0.01)), vec3(0, 0.66, -0.318), rgb(0.88, 0.82, 0.66)); // sign
+      m.combine(buildBox(vec3(0.4, 0.02, 0.012)), vec3(0, 0.66, -0.322), DARK); // its lettering
+      m.combine(buildBox(vec3(0.86, 0.03, 0.2)), vec3(0, 0.42, -0.4), rgb(0.42, 0.28, 0.16)); // porch roof
+      m.combine(buildBox(vec3(0.86, 0.03, 0.2)), vec3(0, 0.015, -0.4), rgb(0.42, 0.28, 0.16)); // boardwalk
+      for (const x of [-0.4, 0, 0.4]) m.combine(buildBox(vec3(0.03, 0.4, 0.03)), vec3(x, 0.21, -0.49), plank);
+      for (const side of [-1, 1]) {
+        m.combine(buildBox(vec3(0.07, 0.13, 0.02)), vec3(side * 0.04, 0.17, -0.3), DARK); // swinging doors
+        m.combine(buildBox(vec3(0.16, 0.14, 0.02)), vec3(side * 0.25, 0.27, -0.3), WINDOW);
+      }
+      break;
+    }
+    case 'pod': {
+      // an alien habitat: a pale dome on a ring, a glowing window band, an airlock and an antenna
+      const glow = rgb(0.3, 0.95, 0.7);
+      m.combine(
+        buildSphere(0.8, 12, 8),
+        buildMatrix(vec3(0, 0.05, 0), vec3(), vec3(1, 0.75, 1)),
+        rgb(0.8, 0.82, 0.88),
+      );
+      m.combine(buildTorus(0.82, 0.06, 12, 4), vec3(0, 0.05, 0), STEEL);
+      m.combine(buildTorus(0.72, 0.035, 12, 3), vec3(0, 0.2, 0), glow);
+      m.combine(buildCylinder(0.24, 0.03, 10), vec3(0, 0.345, 0), roof);
+      m.combine(buildBox(vec3(0.22, 0.2, 0.2), 0.03), vec3(0, 0.1, -0.36), rgb(0.7, 0.72, 0.78)); // airlock
+      m.combine(buildBox(vec3(0.12, 0.14, 0.02)), vec3(0, 0.09, -0.465), glow);
+      m.combine(buildCylinder(0.02, 0.32, 4), vec3(0.14, 0.46, 0.08), STEEL); // antenna
+      m.combine(buildSphere(0.06, 6, 4), vec3(0.14, 0.63, 0.08), rgb(0.95, 0.35, 0.8));
+      break;
+    }
     default:
       m.combine(buildBox(vec3(0.8, 0.5, 0.7), 0.02), vec3(0, 0.25, 0), wall);
       m.combine(
