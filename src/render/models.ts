@@ -99,28 +99,28 @@ export function buildTank(team: Team): TankMeshes {
   return { hull, turret };
 }
 
-const SLUG_METAL = rgb(0.55, 0.57, 0.6);
-const SLUG_METAL_DARK = rgb(0.38, 0.4, 0.43);
+const POCKET_METAL = rgb(0.55, 0.57, 0.6);
+const POCKET_METAL_DARK = rgb(0.38, 0.4, 0.43);
 const GUNMETAL = rgb(0.26, 0.28, 0.31);
 
 /**
- * The tank's Metal Slug skin, after the SV-001 of the arcade series, built like the standard tank: a
+ * The tank's pocket tank skin, a stubby cartoon arcade tank built like the standard tank: a
  * short grey steel hull with rounded armour and a raised front, and a round turret with the
  * stubby cannon low and the twin Vulcans on top, a closed hatch behind. Same footprint and turret
  * pivot as the tank.
  */
-export function buildMetalSlug(team: Team): TankMeshes {
+export function buildPocketTank(team: Team): TankMeshes {
   const hull = new Mesh();
-  hull.combine(buildBox(vec3(0.6, 0.22, 0.86), 0.06), vec3(0, 0.21, 0.02), SLUG_METAL);
+  hull.combine(buildBox(vec3(0.6, 0.22, 0.86), 0.06), vec3(0, 0.21, 0.02), POCKET_METAL);
   for (const side of [-1, 1]) {
     hull.combine(buildBox(vec3(0.18, 0.2, 0.96), 0.06), vec3(side * 0.36, 0.1, 0), DARK); // tracks
     for (let i = 0; i < 4; i++) {
       const z = -0.33 + i * 0.22;
       hull.combine(wheel(0.17, 0.03, 10), vec3(side * 0.455, 0.1, z), GUNMETAL);
-      hull.combine(wheel(0.07, 0.035, 6), vec3(side * 0.455, 0.1, z), SLUG_METAL_DARK); // hub
+      hull.combine(wheel(0.07, 0.035, 6), vec3(side * 0.455, 0.1, z), POCKET_METAL_DARK); // hub
     }
     // rounded fenders over the tracks, and the round headlamps in the raised front
-    hull.combine(buildBox(vec3(0.21, 0.05, 0.98), 0.025), vec3(side * 0.36, 0.215, 0), SLUG_METAL_DARK);
+    hull.combine(buildBox(vec3(0.21, 0.05, 0.98), 0.025), vec3(side * 0.36, 0.215, 0), POCKET_METAL_DARK);
     hull.combine(
       buildCylinder(0.07, 0.03, 8),
       buildMatrix(vec3(side * 0.18, 0.27, -0.42), vec3(Math.PI / 2, 0, 0)),
@@ -135,17 +135,17 @@ export function buildMetalSlug(team: Team): TankMeshes {
   hull.combine(
     buildBox(vec3(0.52, 0.04, 0.18), 0.015),
     buildMatrix(vec3(0, 0.3, -0.38), vec3(0.4, 0, 0)),
-    SLUG_METAL_DARK,
+    POCKET_METAL_DARK,
   ); // raised front plate
   for (let i = 0; i < 3; i++)
     hull.combine(buildBox(vec3(0.34, 0.015, 0.03)), vec3(0, 0.325, 0.2 + i * 0.06), DARK); // engine louvres
   hull.combine(buildBox(vec3(0.46, 0.02, 0.1)), vec3(0, 0.325, 0.39), TEAM_COLORS[team]);
 
   const turret = new Mesh();
-  turret.combine(buildCylinder(0.44, 0.16, 12), vec3(0, 0.08, 0.04), SLUG_METAL);
-  turret.combine(buildCylinder(0.48, 0.03, 12), vec3(0, 0.015, 0.04), SLUG_METAL_DARK); // ring
+  turret.combine(buildCylinder(0.44, 0.16, 12), vec3(0, 0.08, 0.04), POCKET_METAL);
+  turret.combine(buildCylinder(0.48, 0.03, 12), vec3(0, 0.015, 0.04), POCKET_METAL_DARK); // ring
   // the stubby cannon low in a round mantlet, with its muzzle brake
-  turret.combine(buildSphere(0.16, 8, 6), vec3(0, 0.08, -0.17), SLUG_METAL_DARK);
+  turret.combine(buildSphere(0.16, 8, 6), vec3(0, 0.08, -0.17), POCKET_METAL_DARK);
   turret.combine(
     buildCylinder(0.09, 0.3, 8),
     buildMatrix(vec3(0, 0.08, -0.36), vec3(Math.PI / 2, 0, 0)),
@@ -160,7 +160,7 @@ export function buildMetalSlug(team: Team): TankMeshes {
       buildMatrix(vec3(side * 0.045, 0.2, -0.29), vec3(Math.PI / 2, 0, 0)),
       DARK,
     );
-  turret.combine(buildCylinder(0.15, 0.04, 10), vec3(0.04, 0.18, 0.12), SLUG_METAL_DARK); // closed hatch
+  turret.combine(buildCylinder(0.15, 0.04, 10), vec3(0.04, 0.18, 0.12), POCKET_METAL_DARK); // closed hatch
   turret.combine(buildCylinder(0.015, 0.36, 4), vec3(-0.15, 0.34, 0.2), DARK); // aerial
   turret.combine(buildBox(vec3(0.1, 0.012, 0.1)), vec3(-0.11, 0.165, 0.1), TEAM_COLORS[team]);
   return { hull, turret };
@@ -171,11 +171,11 @@ const UNSC_GREEN_DARK = rgb(0.26, 0.3, 0.22);
 const UNSC_GREY = rgb(0.42, 0.43, 0.42);
 
 /**
- * The tank's Scorpion skin, after the M808 of the Halo series: a wide, flat, faceted hull riding on
+ * The tank's stinger skin, a sci-fi battle tank: a wide, flat, faceted hull riding on
  * four separate track pods at its corners, and a low angular turret with a very long main gun and
  * a coaxial machine gun beside it. Same footprint and turret pivot as the tank.
  */
-export function buildScorpion(team: Team): TankMeshes {
+export function buildStinger(team: Team): TankMeshes {
   const hull = new Mesh();
   hull.combine(buildBox(vec3(0.42, 0.14, 0.86), 0.02), vec3(0, 0.25, 0), UNSC_GREEN); // spine
   hull.combine(
@@ -384,11 +384,11 @@ const VAN_RED = rgb(0.75, 0.1, 0.08);
 const CHROME = rgb(0.78, 0.78, 0.8);
 
 /**
- * The ASV's A-Team skin: the early-80s full-size van, black over metallic grey with the red stripe
+ * The ASV's action van skin: an early-80s full-size van, black over metallic grey with the red stripe
  * that sweeps up at the back, a red roof spoiler and red rims. It fires and lays mines the same as
  * the ASV, from the same footprint.
  */
-export function buildATeamVan(team: Team): Mesh {
+export function buildActionVan(team: Team): Mesh {
   const m = new Mesh();
   // grey below the beltline, the black box above it, the short bonnet and the raked windscreen
   m.combine(buildBox(vec3(0.62, 0.22, 1.1), 0.02), vec3(0, 0.25, 0), VAN_GREY);
@@ -515,11 +515,11 @@ const STEALTH_LIGHT = rgb(0.22, 0.22, 0.25);
 const CANOPY = rgb(0.3, 0.26, 0.16);
 
 /**
- * The helicopter's F-117A skin: the faceted black stealth jet, a swept flying wing with a sawtooth
+ * The helicopter's stealth jet skin: a faceted black stealth fighter, a swept flying wing with a sawtooth
  * trailing edge, the canopy at the peak of its facets and a V-tail canted outward. It has no rotors;
  * the gun and rockets fly the same as the helicopter's.
  */
-export function buildF117(team: Team): HeliMeshes {
+export function buildStealthJet(team: Team): HeliMeshes {
   const nose = vec3(0, 0.34, -0.78);
   const peak = vec3(0, 0.48, -0.22);
   const spine = vec3(0, 0.45, 0.22);
@@ -716,41 +716,41 @@ export function buildJeep(team: Team): JeepMeshes {
   return { body, wheel: tyre };
 }
 
-const PANDA_GREY = rgb(0.52, 0.53, 0.55);
+const HOBBY_GREY = rgb(0.52, 0.53, 0.55);
 const CLADDING = rgb(0.27, 0.27, 0.28);
 const TRIM = rgb(0.14, 0.14, 0.15);
 const INDICATOR = rgb(0.9, 0.5, 0.12);
 
 /**
- * The jeep's Panda skin: a grey 1990s Fiat Panda, the boxy two-box hatch with flat slab sides, a
+ * The jeep's hobby skin: a grey 1990s Italian city car, the boxy two-box hatch with flat slab sides, a
  * low beltline under tall flat glass, a short flat bonnet and an upright hatch. Dark plastic does
- * the detailing, as on the real car: the full-width front panel with its offset grille, the
+ * the detailing, as on the cars of its day: the full-width front panel with its offset grille, the
  * wraparound bumpers and the band along the doors. Same footprint and wheels as the jeep.
  */
-export function buildPanda(team: Team): JeepMeshes {
+export function buildHobby(team: Team): JeepMeshes {
   const body = new Mesh();
   // the lower body up to the beltline, and the bonnet over its front, falling a touch to the nose
-  body.combine(buildBox(vec3(0.48, 0.18, 0.84), 0.02), vec3(0, 0.22, 0), PANDA_GREY);
+  body.combine(buildBox(vec3(0.48, 0.18, 0.84), 0.02), vec3(0, 0.22, 0), HOBBY_GREY);
   body.combine(
     buildBox(vec3(0.47, 0.02, 0.26), 0.008),
     buildMatrix(vec3(0, 0.31, -0.29), vec3(-0.05, 0, 0)),
-    PANDA_GREY,
+    HOBBY_GREY,
   );
   // the glasshouse, set in a little from the slab sides: glass, the raked windscreen, a flat roof
   body.combine(buildBox(vec3(0.43, 0.16, 0.49)), vec3(0, 0.39, 0.145), WINDOW);
   const screen = buildMatrix(vec3(0, 0.39, -0.13), vec3(0.45, 0, 0));
   body.combine(buildBox(vec3(0.42, 0.185, 0.015)), screen, WINDOW);
-  body.combine(buildBox(vec3(0.45, 0.03, 0.5), 0.01), vec3(0, 0.485, 0.145), PANDA_GREY);
+  body.combine(buildBox(vec3(0.45, 0.03, 0.5), 0.01), vec3(0, 0.485, 0.145), HOBBY_GREY);
   body.combine(buildBox(vec3(0.2, 0.008, 0.14)), vec3(0, 0.503, 0.2), TEAM_COLORS[team]);
   for (const side of [-1, 1]) {
     // thin pillars: the A along the windscreen, the B at the end of the long door, a broad C
     body.combine(
       buildBox(vec3(0.03, 0.19, 0.03)),
       buildMatrix(vec3(side * 0.215, 0.39, -0.13), vec3(0.45, 0, 0)),
-      PANDA_GREY,
+      HOBBY_GREY,
     );
-    body.combine(buildBox(vec3(0.03, 0.16, 0.04)), vec3(side * 0.215, 0.39, 0.13), PANDA_GREY);
-    body.combine(buildBox(vec3(0.03, 0.16, 0.08)), vec3(side * 0.215, 0.39, 0.35), PANDA_GREY);
+    body.combine(buildBox(vec3(0.03, 0.16, 0.04)), vec3(side * 0.215, 0.39, 0.13), HOBBY_GREY);
+    body.combine(buildBox(vec3(0.03, 0.16, 0.08)), vec3(side * 0.215, 0.39, 0.35), HOBBY_GREY);
     // the plastic band along the doors, the door's shut lines, its handle and the mirror
     body.combine(buildBox(vec3(0.012, 0.06, 0.52)), vec3(side * 0.243, 0.18, 0), CLADDING);
     for (const z of [-0.17, 0.15])

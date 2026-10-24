@@ -281,7 +281,7 @@ All terrain and structure changes persist for the whole round and appear on the 
 ### 9.2 Bunker screen
 - Shows the underground garage with the four vehicle slots. A vehicle type with no stock left shows an empty slot.
 - **Ground Fire** selects a vehicle. **Air Fire** opens the map.
-- **Up/Down** picks a skin for the highlighted vehicle type: a different model only, behaving exactly the same. The tank has the SV-001 from the Metal Slug series and the M808 Scorpion from Halo; the ASV has the A-Team van; the helicopter has the F-117A stealth fighter and a classic flying-saucer UFO; the jeep has a grey 1990s Fiat Panda. (Not in the original.)
+- **Up/Down** picks a skin for the highlighted vehicle type: a different model only, behaving exactly the same. The tank has a stubby cartoon "pocket tank" and a sci-fi "stinger" battle tank; the ASV has an 80s "action van"; the helicopter has a "stealth jet" and a classic flying-saucer UFO; the jeep has a grey 1990s city car, the "hobby". The skins have generic names and are not modelled on any branded design by name. (Not in the original.)
 - The elevator animation plays when a vehicle leaves or arrives.
 
 ### 9.3 Map screen (only available in the bunker)

@@ -73,34 +73,34 @@ const scenarios: { name: string; query: string; steps: Step[] }[] = [
       { up: ['KeyW'], wait: 200 },
     ],
   },
-  // down picks the jeep's Panda skin, in the hangar and then on the field
+  // down picks the jeep's hobby skin, in the hangar and then on the field
   {
-    name: 'panda-bunker',
+    name: 'hobby-bunker',
     query: '?level=training-01',
     steps: [{ wait: 1200 }, { press: ['KeyA', 'KeyS'], wait: 600 }],
   },
   {
-    name: 'slug-bunker',
+    name: 'pocket-bunker',
     query: '?level=training-01',
     steps: [{ wait: 1200 }, { press: ['KeyS'], wait: 600 }],
   },
   {
-    name: 'scorpion-bunker',
+    name: 'stinger-bunker',
     query: '?level=training-01',
     steps: [{ wait: 1200 }, { press: ['KeyS', 'KeyS'], wait: 600 }],
   },
   {
-    name: 'ateam-bunker',
+    name: 'van-bunker',
     query: '?level=training-01',
     steps: [{ wait: 1200 }, { press: ['KeyD', 'KeyS'], wait: 600 }],
   },
   {
-    name: 'f117-bunker',
+    name: 'stealth-bunker',
     query: '?level=training-01',
     steps: [{ wait: 1200 }, { press: ['KeyD', 'KeyD', 'KeyS'], wait: 600 }],
   },
   {
-    name: 'f117',
+    name: 'stealth',
     query: '?level=training-01',
     steps: [
       { wait: 1200 },
@@ -116,7 +116,7 @@ const scenarios: { name: string; query: string; steps: Step[] }[] = [
     steps: [{ wait: 1200 }, { press: ['KeyD', 'KeyD', 'KeyH'], wait: 7000 }],
   },
   {
-    name: 'panda',
+    name: 'hobby',
     query: '?level=training-01',
     steps: [
       { wait: 1200 },

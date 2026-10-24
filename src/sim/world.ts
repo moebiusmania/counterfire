@@ -24,10 +24,10 @@ export const VEHICLE_ORDER: readonly VehicleType[] = ['tank', 'asv', 'heli', 'je
 
 /** The looks each vehicle type can wear, chosen with up and down in the bunker. Only the model changes. */
 export const VEHICLE_SKINS: Record<VehicleType, readonly string[]> = {
-  tank: ['standard', 'metal slug', 'scorpion'],
-  asv: ['standard', 'a-team'],
-  heli: ['standard', 'f-117a', 'ufo'],
-  jeep: ['standard', 'panda'],
+  tank: ['standard', 'pocket tank', 'stinger'],
+  asv: ['standard', 'action van'],
+  heli: ['standard', 'stealth jet', 'ufo'],
+  jeep: ['standard', 'hobby'],
 };
 
 /** Destroyed vehicles burn this long before the wreck is cleared. */

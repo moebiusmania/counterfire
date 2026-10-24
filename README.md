@@ -34,3 +34,7 @@ The level editor runs at http://localhost:3000/editor while `bun run dev` is up.
 Gamepads: the first one plays P1 and the second P2 (stick/d-pad drive, shoulders turret/strafe, A/B/X the three fire keys).
 
 Dev URLs: `?players=2` for a split-screen duel, `?level=<id>` for any level, `?showcase` for a still line-up of every model, `?seed=N` for a fixed seed, `?test` to expose the world to the smoke test. In the bunker, Air Fire (J) opens the map.
+
+## Licence
+
+Counterfire is free software under the [GNU General Public License v3.0 or later](LICENSE): anyone may copy, change and share it, and anyone who distributes it, changed or not, must share the full source under the same licence. It is an unofficial fan remake, not affiliated with the owners of *Return Fire*. See [NOTICE.md](NOTICE.md).

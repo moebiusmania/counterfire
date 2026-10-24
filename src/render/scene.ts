@@ -22,25 +22,25 @@ import { heliAimPoint } from '../sim/vehicles/heli';
 import type { Vehicle } from '../sim/vehicles/vehicle';
 import { type Shot, type SimEvent, VEHICLE_SKINS, type World } from '../sim/world';
 import {
+  buildActionVan,
   buildAimMarker,
   buildAsv,
-  buildATeamVan,
   buildBuilding,
   buildBunker,
   buildBunkerLamp,
   buildDepot,
   buildDrone,
-  buildF117,
   buildFlag,
   buildFlagTower,
   buildHeli,
+  buildHobby,
   buildJeep,
-  buildMetalSlug,
   buildMine,
-  buildPanda,
+  buildPocketTank,
   buildRubble,
-  buildScorpion,
   buildSoldier,
+  buildStealthJet,
+  buildStinger,
   buildSubmarine,
   buildTank,
   buildTurretParts,
@@ -428,13 +428,13 @@ export class SceneView {
 
 /** The tank's models by skin; any other skin is the standard tank. */
 const TANK_SKINS: Record<string, (team: Team) => TankMeshes> = {
-  'metal slug': buildMetalSlug,
-  scorpion: buildScorpion,
+  'pocket tank': buildPocketTank,
+  stinger: buildStinger,
 };
 
 /** The helicopter's models by skin; any other skin is the standard helicopter. */
 const HELI_SKINS: Record<string, (team: Team) => HeliMeshes> = {
-  'f-117a': buildF117,
+  'stealth jet': buildStealthJet,
   ufo: buildUfo,
 };
 
@@ -454,7 +454,7 @@ export function buildVehicleView(type: VehicleType, team: Team, at: Vector3, ski
       return out;
     }
     case 'asv': {
-      const build = VEHICLE_SKINS.asv[skin] === 'a-team' ? buildATeamVan : buildAsv;
+      const build = VEHICLE_SKINS.asv[skin] === 'action van' ? buildActionVan : buildAsv;
       return view(new EngineObject3D(at, build(team)), 1.4);
     }
     case 'heli': {
@@ -472,7 +472,7 @@ export function buildVehicleView(type: VehicleType, team: Team, at: Vector3, ski
       return out;
     }
     case 'jeep': {
-      const meshes = VEHICLE_SKINS.jeep[skin] === 'panda' ? buildPanda(team) : buildJeep(team);
+      const meshes = VEHICLE_SKINS.jeep[skin] === 'hobby' ? buildHobby(team) : buildJeep(team);
       const out = view(new EngineObject3D(at, meshes.body), 0.9);
       for (const [x, z] of [
         [-0.26, -0.27],

@@ -2,9 +2,10 @@
   "name": "counterfire",
   "type": "module",
   "private": true,
+  "license": "GPL-3.0-or-later",
   "scripts": {
     "dev": "bun --hot scripts/dev.ts",
-    "build": "bun build ./index.html --outdir dist --minify",
+    "build": "bun build ./index.html --outdir dist --minify && cp LICENSE NOTICE.md dist/",
     "test": "bun test",
     "typecheck": "bun check",
     "lint": "biome check src tests scripts tools",
