@@ -29,6 +29,7 @@ bun run dev        # http://localhost:3000, add ?players=2 for split-screen
 | `bun run lint` | Biome |
 | `bun run build` | production build into `dist/` |
 | `bun tools/build-levels.ts` | regenerate the 72-map set and its catalog |
+| `bun tools/og-image.ts` | render the social share card, `assets/og-image.svg`, to `og-image.png` |
 
 Locally, the level editor runs at http://localhost:3000/editor/ while `bun run dev` is up. Every push to `main` is tested and deployed to GitHub Pages, editor included.
 
