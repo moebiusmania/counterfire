@@ -10,7 +10,7 @@ const out = process.env.SMOKE_OUT ?? join(root, 'smoke-out');
 await mkdir(out, { recursive: true });
 
 const build = await Bun.build({
-  entrypoints: [join(root, 'index.html'), join(root, 'editor.html')],
+  entrypoints: [join(root, 'index.html'), join(root, 'editor/index.html')],
   outdir: join(root, 'dist'),
 });
 if (!build.success) throw new AggregateError(build.logs, 'build failed');
@@ -19,7 +19,7 @@ const server = Bun.serve({
   port: 0,
   async fetch(req) {
     const path = new URL(req.url).pathname;
-    const page = path === '/' ? 'index.html' : path === '/editor' ? 'editor.html' : path;
+    const page = path.endsWith('/') ? `${path}index.html` : path;
     const file = Bun.file(join(root, 'dist', page));
     return (await file.exists()) ? new Response(file) : new Response('not found', { status: 404 });
   },
@@ -256,7 +256,7 @@ try {
     const errors: string[] = [];
     page.on('pageerror', (e) => errors.push(e.message));
     page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
-    await page.goto(`${server.url}editor`);
+    await page.goto(`${server.url}editor/`);
     await page.waitForTimeout(500);
     await page.fill('#genTier', '6');
     await page.fill('#genSeed', '42');

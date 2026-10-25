@@ -1,5 +1,5 @@
 // The level editor page (SPEC §10.5): paint terrain, place structures, set stock, validate, play
-// the map straight away, and export it as JSON for assets/levels. Dev builds only, at /editor.
+// the map straight away, and export it as JSON for assets/levels. Served at /editor/.
 
 import { LEVELS } from '../levels';
 import { generateDuel, generateLevel, type Layout } from '../levels/generate';
@@ -269,7 +269,8 @@ $('validate').onclick = () => validate();
 $('play').onclick = () => {
   if (!validate()) return;
   localStorage.setItem(CUSTOM_KEY, JSON.stringify(current()));
-  open('/?level=custom', '_blank');
+  // relative, so it also works under the Pages project path
+  open('../?level=custom', '_blank');
 };
 $('export').onclick = () => {
   const level = current();

@@ -55,7 +55,7 @@
   input/                key bindings, gamepad, per-player mapping
   levels/               level loader + schema validation
 /tools
-  level-editor/         browser-based editor (dev only)
+  level-editor/         browser-based editor
 /assets
   models/*.glb
   textures/
@@ -397,7 +397,7 @@ Two-player maps are point-symmetric so both sides are equal. The designer draws 
 - Tests check every map: valid, deterministic, harder by tier, a fuel depot near each bunker, land access to the compound on early tiers, unique names, every theme used.
 
 ### 10.5 Level editor (development tool)
-A browser editor at `/editor` in dev builds (`bun run dev`). It does the following:
+A browser editor at `/editor/`, in dev builds (`bun run dev`) and the production build. It does the following:
 - loads any shipped level, or roughs in a new one from a tier, seed and layout
 - paints terrain and places structures for any team (right click removes)
 - edits the id, name, mode, players, theme, tier, size, bounds inset and stock
