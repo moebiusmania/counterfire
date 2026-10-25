@@ -101,12 +101,11 @@ export class TerrainView {
     const height = (lx: number, lz: number) => {
       const gx = Math.round(lx + w / 2);
       const gy = Math.round(h / 2 - lz);
-      return Math.min(
-        tileHeight(t.get(gx - 1, gy - 1)),
-        tileHeight(t.get(gx, gy - 1)),
-        tileHeight(t.get(gx - 1, gy)),
-        tileHeight(t.get(gx, gy)),
-      );
+      const corner = [t.get(gx - 1, gy - 1), t.get(gx, gy - 1), t.get(gx - 1, gy), t.get(gx, gy)];
+      // where a bridge meets land the bank stays level up to the deck, like an abutment, rather than
+      // sloping a whole land tile down into the river and leaving the bridge's end in the air
+      if (corner.includes(Tile.Bridge) && corner.some((c) => tileHeight(c) === 0)) return 0;
+      return Math.min(...corner.map(tileHeight));
     };
     const mesh = buildGrid(vec2(w, h), vec2(w, h), color, height);
     mesh.doubleSided = false;
