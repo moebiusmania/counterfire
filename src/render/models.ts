@@ -15,6 +15,7 @@ import {
   vec3,
   WHITE,
 } from 'littlejsengine';
+import type { Level } from '../levels/schema';
 import type { Team } from '../sim/types';
 
 export const TEAM_COLORS: Record<Team, Color> = {
@@ -807,28 +808,110 @@ export function buildBunkerLamp(): Mesh {
   return new Mesh().combine(buildSphere(0.16, 8, 6), vec3(), WHITE);
 }
 
-/** Generic buildings by level variant: a house with a pitched roof, a long barracks, a hangar. */
-export function buildBuilding(variant: string | undefined, team: Team): Mesh {
+/** How the generic house, barracks and hangar are dressed in each biome (SPEC §10.3 rule 9). */
+interface BuildingStyle {
+  wall: Color;
+  /** The roof of a neutral building; owned ones take their team colour. */
+  roof: Color;
+  barracks: Color;
+  hangar: Color;
+  window: Color;
+  /** House roof: pitched, flat behind a parapet (adobe) or a low dome. */
+  houseRoof: 'pitched' | 'flat' | 'dome';
+  snow?: boolean;
+}
+
+const SNOW = rgb(0.93, 0.95, 0.98);
+const TEMPERATE_BUILDINGS: BuildingStyle = {
+  wall: rgb(0.72, 0.66, 0.55),
+  roof: rgb(0.55, 0.25, 0.18),
+  barracks: rgb(0.5, 0.52, 0.4),
+  hangar: rgb(0.55, 0.57, 0.55),
+  window: WINDOW,
+  houseRoof: 'pitched',
+};
+const BUILDING_STYLES: Record<Level['theme'], BuildingStyle> = {
+  temperate: TEMPERATE_BUILDINGS,
+  novelty: TEMPERATE_BUILDINGS,
+  desert: {
+    wall: rgb(0.8, 0.66, 0.46),
+    roof: rgb(0.72, 0.58, 0.4),
+    barracks: rgb(0.68, 0.6, 0.44),
+    hangar: rgb(0.7, 0.65, 0.54),
+    window: WINDOW,
+    houseRoof: 'flat',
+  },
+  winter: {
+    wall: rgb(0.48, 0.34, 0.22),
+    roof: rgb(0.3, 0.32, 0.36),
+    barracks: rgb(0.6, 0.62, 0.6),
+    hangar: rgb(0.6, 0.62, 0.64),
+    window: rgb(0.85, 0.72, 0.4), // lit from inside
+    houseRoof: 'pitched',
+    snow: true,
+  },
+  city: {
+    wall: rgb(0.6, 0.33, 0.25), // brick
+    roof: rgb(0.32, 0.34, 0.38), // slate
+    barracks: rgb(0.52, 0.52, 0.54),
+    hangar: rgb(0.5, 0.52, 0.56),
+    window: WINDOW,
+    houseRoof: 'pitched',
+  },
+  western: {
+    wall: rgb(0.6, 0.43, 0.26), // planks
+    roof: rgb(0.5, 0.48, 0.44), // tin
+    barracks: rgb(0.56, 0.42, 0.28),
+    hangar: rgb(0.58, 0.4, 0.28), // rusted
+    window: WINDOW,
+    houseRoof: 'pitched',
+  },
+  alien: {
+    wall: rgb(0.74, 0.72, 0.84),
+    roof: rgb(0.2, 0.7, 0.62),
+    barracks: rgb(0.55, 0.5, 0.66),
+    hangar: rgb(0.62, 0.6, 0.72),
+    window: rgb(0.3, 0.95, 0.7), // glowing
+    houseRoof: 'dome',
+  },
+};
+
+/**
+ * Generic buildings by level variant: a house, a long barracks, a hangar, plus the themed tower
+ * block, saloon and pod. The first three take their colours and small details from the biome.
+ */
+export function buildBuilding(
+  variant: string | undefined,
+  team: Team,
+  biome: Level['theme'] = 'temperate',
+): Mesh {
   const m = new Mesh();
-  const wall = rgb(0.72, 0.66, 0.55);
-  const roof = team === 'NEUTRAL' ? rgb(0.55, 0.25, 0.18) : TEAM_COLORS[team];
+  const style = BUILDING_STYLES[biome];
+  const wall = style.wall;
+  const roof = team === 'NEUTRAL' ? style.roof : TEAM_COLORS[team];
   switch (variant) {
     case 'barracks':
-      m.combine(buildBox(vec3(0.95, 0.5, 0.6), 0.02), vec3(0, 0.25, 0), rgb(0.5, 0.52, 0.4));
+      m.combine(buildBox(vec3(0.95, 0.5, 0.6), 0.02), vec3(0, 0.25, 0), style.barracks);
       m.combine(buildBox(vec3(1.0, 0.06, 0.66)), vec3(0, 0.53, 0), DARK);
+      if (style.snow) m.combine(buildBox(vec3(0.96, 0.04, 0.62)), vec3(0, 0.58, 0), SNOW);
       for (let i = 0; i < 4; i++) {
         const x = -0.36 + i * 0.24;
         if (i === 1)
           m.combine(buildBox(vec3(0.14, 0.28, 0.02)), vec3(x, 0.14, -0.305), DARK); // door
-        else m.combine(buildBox(vec3(0.12, 0.1, 0.02)), vec3(x, 0.3, -0.305), WINDOW);
-        m.combine(buildBox(vec3(0.12, 0.1, 0.02)), vec3(x, 0.3, 0.305), WINDOW);
+        else m.combine(buildBox(vec3(0.12, 0.1, 0.02)), vec3(x, 0.3, -0.305), style.window);
+        m.combine(buildBox(vec3(0.12, 0.1, 0.02)), vec3(x, 0.3, 0.305), style.window);
       }
       m.combine(buildBox(vec3(0.16, 0.1, 0.16)), vec3(0.3, 0.6, 0.1), STEEL); // roof vent
+      if (biome === 'desert') {
+        // sandbags along the front
+        for (const x of [-0.3, -0.1, 0.1, 0.3])
+          m.combine(buildBox(vec3(0.18, 0.08, 0.1), 0.03), vec3(x, 0.04, -0.4), rgb(0.62, 0.54, 0.38));
+      }
       break;
     case 'hangar': {
       const shell = buildCylinder(0.9, 0.9, 10);
       shell.transform(buildMatrix(vec3(0, 0, 0), vec3(Math.PI / 2, 0, 0)));
-      m.combine(shell, buildMatrix(vec3(0, 0.05, 0), vec3(), vec3(1, 0.8, 1)), rgb(0.55, 0.57, 0.55));
+      m.combine(shell, buildMatrix(vec3(0, 0.05, 0), vec3(), vec3(1, 0.8, 1)), style.hangar);
       m.combine(buildBox(vec3(0.5, 0.4, 0.02)), vec3(0, 0.2, -0.46), DARK);
       m.combine(buildBox(vec3(0.58, 0.04, 0.03)), vec3(0, 0.42, -0.46), STEEL); // door rail
       // ribs over the shell
@@ -836,8 +919,9 @@ export function buildBuilding(variant: string | undefined, team: Team): Mesh {
         m.combine(
           buildTorus(0.9, 0.02, 10, 3),
           buildMatrix(vec3(0, 0.05, z), vec3(Math.PI / 2, 0, 0), vec3(1, 1, 0.8)),
-          STEEL,
+          biome === 'alien' ? style.window : STEEL,
         );
+      if (style.snow) m.combine(buildBox(vec3(0.5, 0.05, 0.88)), vec3(0, 0.41, 0), SNOW); // along the crown
       break;
     }
     case 'tower': {
@@ -895,17 +979,65 @@ export function buildBuilding(variant: string | undefined, team: Team): Mesh {
       break;
     }
     default:
-      m.combine(buildBox(vec3(0.8, 0.5, 0.7), 0.02), vec3(0, 0.25, 0), wall);
       m.combine(
-        buildCone(1.05, 0.4, 4),
-        buildMatrix(vec3(0, 0.7, 0), vec3(0, Math.PI / 4, 0), vec3(1, 1, 0.85)),
-        roof,
+        buildBox(vec3(0.8, 0.5, 0.7), style.houseRoof === 'dome' ? 0.08 : 0.02),
+        vec3(0, 0.25, 0),
+        wall,
       );
       m.combine(buildBox(vec3(0.16, 0.26, 0.02)), vec3(0.15, 0.13, -0.36), DARK); // door
-      m.combine(buildBox(vec3(0.16, 0.12, 0.02)), vec3(-0.18, 0.3, -0.36), WINDOW);
+      m.combine(buildBox(vec3(0.16, 0.12, 0.02)), vec3(-0.18, 0.3, -0.36), style.window);
       for (const side of [-1, 1])
-        m.combine(buildBox(vec3(0.02, 0.12, 0.14)), vec3(side * 0.41, 0.3, 0), WINDOW);
-      m.combine(buildBox(vec3(0.1, 0.3, 0.1)), vec3(0.22, 0.75, 0.12), rgb(0.5, 0.35, 0.28)); // chimney
+        m.combine(buildBox(vec3(0.02, 0.12, 0.14)), vec3(side * 0.41, 0.3, 0), style.window);
+      switch (style.houseRoof) {
+        case 'flat':
+          // adobe: a flat roof behind a low parapet, a water jar and protruding roof beams
+          m.combine(buildBox(vec3(0.8, 0.04, 0.7)), vec3(0, 0.52, 0), roof);
+          for (const side of [-1, 1]) {
+            m.combine(buildBox(vec3(0.84, 0.08, 0.04)), vec3(0, 0.56, side * 0.35), wall);
+            m.combine(buildBox(vec3(0.04, 0.08, 0.7)), vec3(side * 0.41, 0.56, 0), wall);
+          }
+          for (const x of [-0.25, 0, 0.25])
+            m.combine(
+              buildCylinder(0.03, 0.1, 4),
+              buildMatrix(vec3(x, 0.44, -0.38), vec3(Math.PI / 2, 0, 0)),
+              rgb(0.42, 0.3, 0.18),
+            );
+          m.combine(buildSphere(0.16, 6, 4), vec3(0.22, 0.62, 0.15), rgb(0.66, 0.4, 0.26));
+          break;
+        case 'dome':
+          // alien: a low dome with a glowing ring where it meets the walls
+          m.combine(buildSphere(0.92, 10, 6), buildMatrix(vec3(0, 0.5, 0), vec3(), vec3(1, 0.5, 0.85)), roof);
+          m.combine(
+            buildTorus(0.86, 0.04, 10, 3),
+            buildMatrix(vec3(0, 0.51, 0), vec3(), vec3(1, 1, 0.85)),
+            style.window,
+          );
+          m.combine(buildCylinder(0.015, 0.22, 4), vec3(-0.15, 0.82, 0.1), STEEL); // antenna
+          m.combine(buildSphere(0.07, 6, 4), vec3(-0.15, 0.94, 0.1), rgb(0.95, 0.35, 0.8));
+          break;
+        default:
+          m.combine(
+            buildCone(1.05, 0.4, 4),
+            buildMatrix(vec3(0, 0.7, 0), vec3(0, Math.PI / 4, 0), vec3(1, 1, 0.85)),
+            roof,
+          );
+          // a snow cap over the top of the roof
+          if (style.snow)
+            m.combine(
+              buildCone(0.64, 0.24, 4),
+              buildMatrix(vec3(0, 0.79, 0), vec3(0, Math.PI / 4, 0), vec3(1, 1, 0.85)),
+              SNOW,
+            );
+          m.combine(buildBox(vec3(0.1, 0.3, 0.1)), vec3(0.22, 0.75, 0.12), rgb(0.5, 0.35, 0.28)); // chimney
+          if (biome === 'city')
+            m.combine(buildBox(vec3(0.16, 0.12, 0.08)), vec3(-0.18, 0.12, 0.39), rgb(0.7, 0.7, 0.68)); // AC unit
+          if (biome === 'western') {
+            // a porch roof on two posts over the door
+            m.combine(buildBox(vec3(0.4, 0.03, 0.18)), vec3(0.15, 0.32, -0.44), roof);
+            for (const x of [-0.02, 0.32])
+              m.combine(buildBox(vec3(0.03, 0.31, 0.03)), vec3(x, 0.155, -0.52), rgb(0.42, 0.28, 0.16));
+          }
+      }
   }
   return m;
 }

@@ -1,6 +1,6 @@
 // Visual themes (SPEC §10.3 rule 9): the same tiles dressed as temperate grassland, desert,
-// winter, a city, the old west or an alien world. Novelty maps use the temperate look. Only colours
-// and trees change; play is the same.
+// winter, a city, the old west or an alien world. Novelty maps use the temperate look. Only colours,
+// trees and building details (see buildBuilding) change; play is the same.
 
 import {
   buildBox,
@@ -8,6 +8,7 @@ import {
   buildCylinder,
   buildMatrix,
   buildSphere,
+  buildTorus,
   type Color,
   Mesh,
   rgb,
@@ -93,30 +94,61 @@ function cactus(): Mesh {
   return tree;
 }
 
-/** A glowing alien mushroom on a pale stalk, with a crystal growing beside it. */
+/**
+ * An alien growth: a stalk of swollen joints that curls over as it rises, a glowing bulb with
+ * tendrils hanging from it, spores drifting beside it and a crystal cluster at its foot.
+ */
 function alienGrowth(): Mesh {
   const tree = new Mesh();
-  tree.combine(
-    buildCylinder(0.13, 0.75, 6),
-    buildMatrix(vec3(0, 0.37, 0), vec3(0, 0, 0.08)),
-    rgb(0.82, 0.76, 0.86),
-  );
-  tree.combine(
-    buildSphere(0.8, 10, 6),
-    buildMatrix(vec3(-0.03, 0.78, 0), vec3(), vec3(1, 0.42, 1)),
-    rgb(0.2, 0.82, 0.72),
-  );
-  tree.combine(
-    buildSphere(0.36, 8, 4),
-    buildMatrix(vec3(0.24, 0.32, -0.18), vec3(), vec3(1, 0.4, 1)),
-    rgb(0.85, 0.3, 0.75),
-  );
-  tree.combine(buildCylinder(0.06, 0.28, 4), vec3(0.24, 0.14, -0.18), rgb(0.82, 0.76, 0.86));
-  tree.combine(
-    buildCone(0.18, 0.55, 5),
-    buildMatrix(vec3(-0.26, 0.24, 0.2), vec3(0.25, 0, -0.3)),
-    rgb(0.62, 0.35, 0.95),
-  );
+  const stalk = rgb(0.55, 0.85, 0.66);
+  const joint = rgb(0.62, 0.35, 0.95);
+  const glow = rgb(0.95, 0.3, 0.8);
+  // a swollen root at the base
+  tree.combine(buildSphere(0.42, 8, 4), buildMatrix(vec3(0, 0.04, 0), vec3(), vec3(1, 0.45, 1)), joint);
+  // the stalk: five segments, each leaning further than the last
+  let x = -0.15;
+  let y = 0.05;
+  for (let i = 0; i < 5; i++) {
+    const lean = 0.1 + i * 0.09;
+    const d = 0.17 - i * 0.02;
+    tree.combine(
+      buildCylinder(d * 0.75, 0.22, 6),
+      buildMatrix(vec3(x + Math.sin(lean) * 0.11, y + Math.cos(lean) * 0.11, 0), vec3(0, 0, -lean)),
+      stalk,
+    );
+    x += Math.sin(lean) * 0.22;
+    y += Math.cos(lean) * 0.22;
+    tree.combine(buildSphere(d, 6, 4), vec3(x, y, 0), joint);
+  }
+  // the bulb, its ring of tendrils and an eye-like spot under it
+  tree.combine(buildSphere(0.5, 10, 6), buildMatrix(vec3(x, y + 0.12, 0), vec3(), vec3(1, 0.8, 1)), glow);
+  tree.combine(buildTorus(0.5, 0.05, 10, 3), vec3(x, y + 0.04, 0), joint);
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    tree.combine(
+      buildCone(0.08, 0.5, 4),
+      buildMatrix(vec3(x + Math.sin(a) * 0.24, y - 0.2, Math.cos(a) * 0.24), vec3(Math.PI - 0.35, a, 0)),
+      stalk,
+    );
+  }
+  // spores drifting beside it
+  for (const [sx, sy, sz, d] of [
+    [0.35, 0.55, 0.25, 0.1],
+    [-0.3, 0.8, -0.2, 0.08],
+    [0.1, 1.25, -0.3, 0.07],
+  ] as const)
+    tree.combine(buildSphere(d, 6, 4), vec3(sx, sy, sz), rgb(0.4, 1, 0.85));
+  // crystals at the foot
+  for (const [cx, cz, h, tilt, yaw] of [
+    [-0.28, 0.18, 0.5, 0.3, 0.4],
+    [-0.2, 0.3, 0.32, 0.45, 1.6],
+    [0.25, -0.22, 0.38, 0.35, 3.6],
+  ] as const)
+    tree.combine(
+      buildCone(0.14, h, 5),
+      buildMatrix(vec3(cx, h / 2 - 0.03, cz), vec3(tilt, yaw, 0)),
+      rgb(0.35, 0.75, 1),
+    );
   return tree;
 }
 

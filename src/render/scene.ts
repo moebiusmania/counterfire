@@ -123,7 +123,7 @@ export class SceneView {
         mesh = buildFlagTower(t.team);
         break;
       case 'building':
-        mesh = buildBuilding(t.entity.variant, t.team);
+        mesh = buildBuilding(t.entity.variant, t.team, this.world.level.theme);
         break;
       case 'turret': {
         const parts = buildTurretParts(t.turretVariant, t.team);
