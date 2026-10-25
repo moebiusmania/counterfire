@@ -5,7 +5,7 @@
   "license": "GPL-3.0-or-later",
   "scripts": {
     "dev": "bun --hot scripts/dev.ts",
-    "build": "bun build ./index.html ./editor/index.html --outdir dist --minify && cp LICENSE NOTICE.md assets/og-image.png dist/",
+    "build": "bun build ./index.html ./editor/index.html --outdir dist --minify --conditions production && cp LICENSE NOTICE.md assets/og-image.png dist/",
     "test": "bun test",
     "typecheck": "bun check",
     "lint": "biome check src tests scripts tools",

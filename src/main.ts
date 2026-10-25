@@ -6,7 +6,8 @@
 // live world to the browser smoke test.
 // In play: Esc goes back to the menu, F3 pauses, Alt+Enter toggles full screen (SPEC §9.7), as does
 // the button in the menu's top right corner.
-// Shift+Esc opens the engine's debug overlay, F2 turns the music off and on.
+// Shift+Esc opens the engine's debug overlay in the dev server (`bun run build` ships the engine's
+// release build, which has none), F2 turns the music off and on.
 
 import {
   debugOverlay,

@@ -49,9 +49,11 @@ const RAIL_SIDES = [
   [-1, 0, Math.PI / 2],
 ] as const;
 
+type PropKind = 'trees' | 'walls' | 'bridges' | 'rails';
+
 export class TerrainView {
   private ground?: EngineObject3D;
-  private sets: InstancedMesh3D[] = [];
+  private readonly props: Partial<Record<PropKind, { key: string; set?: InstancedMesh3D }>> = {};
   private version = -1;
   private readonly treeMesh: Mesh;
   private readonly wallMesh = buildWallBlock();
@@ -113,9 +115,7 @@ export class TerrainView {
   }
 
   private buildProps(): void {
-    for (const set of this.sets) set.destroy();
-    this.sets = [];
-    const cells: Record<'trees' | 'walls' | 'bridges' | 'rails', [number, number, number][]> = {
+    const cells: Record<PropKind, [number, number, number][]> = {
       trees: [],
       walls: [],
       bridges: [],
@@ -135,30 +135,46 @@ export class TerrainView {
         }
       }
     }
-    this.addSet(this.treeMesh, cells.trees, (x, y) => [
+    this.setProps('trees', this.treeMesh, cells.trees, (x, y) => [
       toWorld(x + 0.3 + cellNoise(x, y, 1) * 0.4, y + 0.3 + cellNoise(x, y, 2) * 0.4),
       vec3(0, cellNoise(x, y, 3) * Math.PI * 2, 0),
       vec3(0.85 + cellNoise(x, y, 4) * 0.35),
     ]);
-    this.addSet(this.wallMesh, cells.walls, (x, y) => [toWorld(x + 0.5, y + 0.5), vec3(), vec3(1)]);
-    this.addSet(this.bridgeMesh, cells.bridges, (x, y) => [toWorld(x + 0.5, y + 0.5), vec3(), vec3(1)]);
-    this.addSet(this.railMesh, cells.rails, (x, y, yaw) => [
+    this.setProps('walls', this.wallMesh, cells.walls, (x, y) => [
+      toWorld(x + 0.5, y + 0.5),
+      vec3(),
+      vec3(1),
+    ]);
+    this.setProps('bridges', this.bridgeMesh, cells.bridges, (x, y) => [
+      toWorld(x + 0.5, y + 0.5),
+      vec3(),
+      vec3(1),
+    ]);
+    this.setProps('rails', this.railMesh, cells.rails, (x, y, yaw) => [
       toWorld(x + 0.5, y + 0.5),
       vec3(0, yaw, 0),
       vec3(1),
     ]);
   }
 
-  private addSet(
+  /** Rebuild one kind of prop, only when its cells changed: a tree shot down leaves the walls alone. */
+  private setProps(
+    kind: PropKind,
     mesh: Mesh,
     cells: [number, number, number][],
     place: (x: number, y: number, yaw: number) => [Vector3, Vector3, Vector3],
   ): void {
-    if (!cells.length) return;
-    const set = new InstancedMesh3D(mesh, cells.length);
-    cells.forEach(([x, y, yaw], i) => {
-      set.setTransformAt(i, ...place(x, y, yaw));
-    });
-    this.sets.push(set);
+    const key = cells.join(';');
+    const old = this.props[kind];
+    if (old?.key === key) return;
+    old?.set?.destroy();
+    let set: InstancedMesh3D | undefined;
+    if (cells.length) {
+      set = new InstancedMesh3D(mesh, cells.length);
+      cells.forEach(([x, y, yaw], i) => {
+        set?.setTransformAt(i, ...place(x, y, yaw));
+      });
+    }
+    this.props[kind] = { key, set };
   }
 }

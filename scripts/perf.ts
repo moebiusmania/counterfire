@@ -10,7 +10,13 @@ const level = process.argv.slice(2).find((a) => !a.startsWith('--')) ?? 'duel-10
 const software = process.argv.includes('--swiftshader');
 const FRAMES = 1200;
 
-const build = await Bun.build({ entrypoints: [join(root, 'index.html')], outdir: out, minify: true });
+// the production condition picks the engine's release build, as `bun run build` ships
+const build = await Bun.build({
+  entrypoints: [join(root, 'index.html')],
+  outdir: out,
+  minify: true,
+  conditions: ['production'],
+});
 if (!build.success) throw new AggregateError(build.logs, 'build failed');
 const server = Bun.serve({
   port: 0,

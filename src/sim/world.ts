@@ -541,15 +541,16 @@ export class World implements Collider {
     let target: { id: number; x: number; y: number } | undefined;
     if (s.tuning.homing === 'heat') {
       // vehicles with their engines running, and drones (SPEC §8.4)
-      const hot = [...this.vehicles.filter((v) => v.controllable), ...this.drones];
       let best = Number.POSITIVE_INFINITY;
-      for (const v of hot) {
+      const consider = (v: Vehicle | Drone) => {
         const d = Math.hypot(v.x - s.x, v.y - s.y);
         if (d < best) {
           best = d;
           target = v;
         }
-      }
+      };
+      for (const v of this.vehicles) if (v.controllable) consider(v);
+      for (const d of this.drones) consider(d);
       s.target = target?.id;
     } else {
       target = this.vehicles.find((v) => v.id === s.target && v.controllable);

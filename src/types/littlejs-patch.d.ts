@@ -1,5 +1,6 @@
 // Declarations for what patches/littlejsengine@1.28.0.patch exports and for internals the
-// split-screen renderer touches. Keep in step with the patch when upgrading LittleJS.
+// split-screen renderer touches. The patch adds the export to both the debug build (dev server)
+// and the release build (`--conditions production`). Keep in step with the patch when upgrading LittleJS.
 import 'littlejsengine';
 
 declare module 'littlejsengine' {

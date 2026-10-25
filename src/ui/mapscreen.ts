@@ -1,12 +1,25 @@
 // The bunker map (SPEC §9.3): the whole battlefield as the IGD sees it, terrain as it is now.
 
-import type { Terrain } from '../sim/terrain';
+import type { Terrain, TileChar } from '../sim/terrain';
 import type { PlayerId } from '../sim/types';
 import type { World } from '../sim/world';
 import { mapMarkers } from './intel';
 import { HUD, MAP_TILE_CSS, TEAM_CSS } from './palette';
 
 type Ctx = CanvasRenderingContext2D;
+
+/** Each tile colour as RGBA bytes, from its #rrggbb. */
+const TILE_RGBA = new Map<TileChar, Uint8ClampedArray>();
+
+function tileRgba(tile: TileChar): Uint8ClampedArray {
+  let rgba = TILE_RGBA.get(tile);
+  if (!rgba) {
+    const n = Number.parseInt(MAP_TILE_CSS[tile].slice(1), 16);
+    rgba = new Uint8ClampedArray([n >> 16, (n >> 8) & 0xff, n & 0xff, 255]);
+    TILE_RGBA.set(tile, rgba);
+  }
+  return rgba;
+}
 
 /** One pixel per tile, redrawn only when the terrain changes. */
 let cache: { terrain: Terrain; version: number; canvas: OffscreenCanvas } | undefined;
@@ -16,12 +29,12 @@ function terrainImage(t: Terrain): OffscreenCanvas {
   const canvas = new OffscreenCanvas(t.w, t.h);
   const ctx = canvas.getContext('2d');
   if (ctx) {
+    // written as pixels in one go, rather than a fillRect per tile
+    const image = ctx.createImageData(t.w, t.h);
     for (let y = 0; y < t.h; y++) {
-      for (let x = 0; x < t.w; x++) {
-        ctx.fillStyle = MAP_TILE_CSS[t.get(x, y)];
-        ctx.fillRect(x, t.h - 1 - y, 1, 1);
-      }
+      for (let x = 0; x < t.w; x++) image.data.set(tileRgba(t.get(x, y)), (x + (t.h - 1 - y) * t.w) * 4);
     }
+    ctx.putImageData(image, 0, 0);
   }
   cache = { terrain: t, version: t.version, canvas };
   return canvas;

@@ -9,3 +9,9 @@ index 021ddc8604ab8ad7efc8c906433c7871a0cb0265..809eca47c82d7f92947f0db3009e2566
 +
 +// counterfire patch: expose the 3D pass so the game can draw a second split-screen viewport
 +export { render3DRenderPass };
+diff --git a/dist/littlejs.esm.min.js b/dist/littlejs.esm.min.js
+--- a/dist/littlejs.esm.min.js
++++ b/dist/littlejs.esm.min.js
+@@ -44,0 +45,2 @@
++// counterfire patch: expose the 3D pass so the game can draw a second split-screen viewport
++export{render3DRenderPass};

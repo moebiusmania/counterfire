@@ -74,6 +74,13 @@ interface SoldierView {
 const WRECK = rgb(0.18, 0.16, 0.14);
 const LAMP_ON = rgb(0.3, 1, 0.4);
 const LAMP_OFF = rgb(0.25, 0.25, 0.25);
+const CORPSE = rgb(0.5, 0.2, 0.18);
+// shot colours, made once rather than per shot in every 3D pass
+const ROCKET = rgb(0.85, 0.85, 0.8);
+const EXHAUST = rgb(1, 0.6, 0.2);
+const TRACER = rgb(1, 1, 0.6);
+const GRENADE = rgb(0.25, 0.3, 0.15);
+const SHELL = rgb(1, 0.9, 0.5);
 /** How far down the shaft a vehicle sinks when the elevator is fully down. */
 const SHAFT_DEPTH = 1.4;
 
@@ -176,7 +183,7 @@ export class SceneView {
       else bob = Math.abs(Math.sin(view.phase)) * 0.04;
       view.obj.pos3D = toWorld(s.x, s.y, s.state === 'dead' ? 0.04 : bob);
       view.obj.rotation3D = vec3(pitch, s.heading, roll);
-      if (s.state === 'dead') view.obj.color = rgb(0.5, 0.2, 0.18);
+      if (s.state === 'dead') view.obj.color = CORPSE;
     }
     for (const [id, view] of this.soldiers) {
       if (alive.has(id)) continue;
@@ -518,18 +525,18 @@ function drawShot(s: Shot): void {
     case 'heliRocket':
     case 'turretMissile':
     case 'subMissile':
-      render3D.drawBox(pos, vec3(0.08, 0.08, 0.38), rgb(0.85, 0.85, 0.8), vec3(0, yaw, 0));
-      render3D.drawSphere(toWorld(s.x - s.dx * 0.6, s.y - s.dy * 0.6, h), 0.16, rgb(1, 0.6, 0.2));
+      render3D.drawBox(pos, vec3(0.08, 0.08, 0.38), ROCKET, vec3(0, yaw, 0));
+      render3D.drawSphere(toWorld(s.x - s.dx * 0.6, s.y - s.dy * 0.6, h), 0.16, EXHAUST);
       break;
     case 'heliGun':
     case 'droneGun':
-      render3D.drawSphere(pos, 0.07, rgb(1, 1, 0.6));
+      render3D.drawSphere(pos, 0.07, TRACER);
       break;
     case 'grenade':
-      render3D.drawSphere(pos, 0.12, rgb(0.25, 0.3, 0.15));
+      render3D.drawSphere(pos, 0.12, GRENADE);
       break;
     default:
-      render3D.drawSphere(pos, 0.14, rgb(1, 0.9, 0.5));
+      render3D.drawSphere(pos, 0.14, SHELL);
   }
 }
 

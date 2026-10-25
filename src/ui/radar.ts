@@ -1,6 +1,7 @@
 // The radar scope (SPEC §9.5): the ground close around the vehicle, other vehicles, drones and
 // mines. Up on the scope is north, as in the 3D view.
 
+import type { TileChar } from '../sim/terrain';
 import { RADAR } from '../sim/tuning';
 import type { Vehicle } from '../sim/vehicles/vehicle';
 import type { World } from '../sim/world';
@@ -22,13 +23,16 @@ export function drawRadar(ctx: Ctx, world: World, v: Vehicle, cx: number, cy: nu
   ctx.globalAlpha = 0.45;
   const t = world.terrain;
   const r = RADAR.range;
+  // setting fillStyle parses the colour, so it is set only when the tile kind changes
+  let last: TileChar | undefined;
   for (let dy = -r; dy <= r; dy++) {
     for (let dx = -r; dx <= r; dx++) {
       const tx = Math.floor(v.x) + dx;
       const ty = Math.floor(v.y) + dy;
       const tile = t.get(tx, ty);
       if (tile === '~') continue;
-      ctx.fillStyle = MAP_TILE_CSS[tile];
+      if (tile !== last) ctx.fillStyle = MAP_TILE_CSS[tile];
+      last = tile;
       ctx.fillRect(cx + (tx - v.x) * k, cy - (ty + 1 - v.y) * k, k + 0.5, k + 0.5);
     }
   }
